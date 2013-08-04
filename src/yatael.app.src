@@ -1,0 +1,14 @@
+{application, yatael, [
+    {description, "Yet Another Twitter API Erlang Library"},
+    {vsn, git},
+    {modules, [yatael]},
+    {registered, []},
+    {applications, [kernel,
+                    stdlib,
+                    inets,
+                    ssl,
+                    oauth
+                   ]
+    },
+    {env, []}
+]}.

@@ -1,6 +1,6 @@
 .eunit
 deps
 *.o
-ebin/*.beam
+ebin/
 *.plt
 api.txt
