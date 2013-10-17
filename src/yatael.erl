@@ -16,9 +16,9 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
 
--define(SERV, ?MODULE).
--define(DEPS, [crypto, public_key, ssl, inets, oauth]).
-
+-define(SERV,     ?MODULE).
+-define(DEPS,     [crypto, asn1, public_key, ssl, inets, oauth]).
+-define(TIMEOUT,  1200000).
 -define(API_URL,  "https://api.twitter.com/1.1/").
 -define(AUTH_URL, "https://api.twitter.com/oauth/").
 
@@ -40,8 +40,8 @@ get_access_token(Verifier) ->
 deauthorize() ->
     gen_server:cast(?SERV, deauthorize).
 
-get(URL, Params) ->
-    gen_server:call(?SERV, {get, URL, Params, header}).
+get_timeline(Name) ->
+    gen_server:call(?SERV, {get_timeline, Name}).
 
 %% @doc Start an acquirer API service.
 -spec start_link(string(), string()) -> {ok, pid()} | {error, term()}.
@@ -84,23 +84,8 @@ handle_call({get_access_token, Params}, _From,
         Error ->
             {reply, Error, State}
     end;
-handle_call({get, URL, Params, ParamsMethod}, _From,
-            #state{consumer = Consumer, a_params = AParams} = State) ->
-    case oauth_get(ParamsMethod, URL, Params, Consumer,
-                   oauth:token(AParams), oauth:token_secret(AParams)) of
-        {ok, {{_, 200, _}, Headers, Body}} ->
-            case proplists:get_value("content-type", Headers) of
-                undefined ->
-                    {reply, {ok, Headers, Body}, State};
-                ContentType ->
-                    io:format("DEBUG: ContentType: ~p~n", [ContentType]),
-                    {reply, {ok, Headers, Body}, State}
-            end;
-        {ok, Response} ->
-            {reply, Response, State};
-        Error ->
-            {reply, Error, State}
-    end;
+handle_call({get_timeline, Name}, _From, State) ->
+    call(get_name(Name, "_timeline"), [], State);
 handle_call(Request, _From, State) ->
     {reply, {unknown_request, Request}, State}.
 
@@ -137,12 +122,37 @@ oauth_get(header, URL, Params, Consumer, Token, TokenSecret) ->
 oauth_get(querystring, URL, Params, Consumer, Token, TokenSecret) ->
   oauth:get(URL, Params, Consumer, Token, TokenSecret).
 
+call(Name, Params, #state{consumer = Consumer, a_params = AParams} = State) ->
+    case oauth_get(header, get_url(Name), Params, Consumer,
+                   oauth:token(AParams), oauth:token_secret(AParams)) of
+        {ok, {{_, 200, _}, Headers, Body}} ->
+            case proplists:get_value("content-type", Headers) of
+                undefined ->
+                    {reply, {ok, Headers, response(Body)}, State};
+                ContentType ->
+                    io:format("DEBUG: ContentType: ~p~n", [ContentType]),
+                    {reply, {ok, Headers, Body}, State}
+            end;
+        {ok, Response} ->
+            {reply, Response, State};
+        Error ->
+            {reply, Error, State}
+    end.
+
 get_url(request_token) ->
     ?AUTH_URL ++ "request_token";
 get_url(access_token) ->
     ?AUTH_URL ++ "access_token";
 get_url(authorize) ->
-    ?AUTH_URL ++ "authorize".
+    ?AUTH_URL ++ "authorize";
+get_url(home_timeline) ->
+    ?API_URL ++ "statuses/home_timeline.json".
+
+get_name(Name, Suffix) ->
+    list_to_atom(atom_to_list(Name) ++ Suffix).
+
+response(Body) ->
+    jsx:decode(unicode:characters_to_binary(Body)).
 
 to_bin(Value) when is_list(Value) ->
     list_to_binary(Value);
