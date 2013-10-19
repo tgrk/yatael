@@ -182,7 +182,7 @@ get_name(Name, Suffix) ->
     list_to_atom(atom_to_list(Name) ++ Suffix).
 
 response(Body) ->
-    jsx:decode(unicode:characters_to_binary(Body)).
+    unicode:characters_to_binary(Body).
 
 to_bin(Value) when is_list(Value) ->
     list_to_binary(Value);
