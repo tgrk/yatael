@@ -40,8 +40,14 @@ get_access_token(Verifier) ->
 deauthorize() ->
     gen_server:cast(?SERV, deauthorize).
 
+get_timeline() ->
+    gen_server:call(?SERV, home_timeline).
+
 get_timeline(Name) ->
-    gen_server:call(?SERV, {get_timeline, Name}).
+    gen_server:call(?SERV, {user_timeline, Name}).
+
+search(Query) ->
+    gen_server:call(?SERV, {search, Query}).
 
 %% @doc Start an acquirer API service.
 -spec start_link(string(), string()) -> {ok, pid()} | {error, term()}.
@@ -84,8 +90,12 @@ handle_call({get_access_token, Params}, _From,
         Error ->
             {reply, Error, State}
     end;
-handle_call({get_timeline, Name}, _From, State) ->
-    call(get_name(Name, "_timeline"), [], State);
+handle_call(home_timeline, _From, State) ->
+    call(home_timeline, [], State);
+handle_call({user_timeline, Name}, _From, State) ->
+    call(user_timeline, [{user, Name}], State);
+handle_call({search, Query}, _From, State) ->
+    call(search, [{q, Query}], State);
 handle_call(Request, _From, State) ->
     {reply, {unknown_request, Request}, State}.
 
@@ -146,7 +156,11 @@ get_url(access_token) ->
 get_url(authorize) ->
     ?AUTH_URL ++ "authorize";
 get_url(home_timeline) ->
-    ?API_URL ++ "statuses/home_timeline.json".
+    ?API_URL ++ "statuses/home_timeline.json";
+get_url(user_timeline) ->
+    ?API_URL ++ "statuses/user_timeline.json";
+get_url(search) ->
+    ?API_URL ++ "search/tweets.json".
 
 get_name(Name, Suffix) ->
     list_to_atom(atom_to_list(Name) ++ Suffix).
