@@ -29,7 +29,7 @@
 %%% API
 %%%============================================================================
 get_request_token() ->
-    gen_server:call(?SERV, get_request_token, 1200000).
+    gen_server:call(?SERV, get_request_token, ?TIMEOUT).
 
 authorize_url(Token) ->
     oauth:uri(get_url(authorize), [{"oauth_token", Token}]).
@@ -42,6 +42,12 @@ deauthorize() ->
 
 get_timeline() ->
     gen_server:call(?SERV, home_timeline).
+
+set_authorization(AuthData) ->
+    gen_server:call(?SERV, {set_authorization, AuthData}).
+
+get_authorization() ->
+    gen_server:call(?SERV, get_authorization).
 
 get_timeline(Name) ->
     gen_server:call(?SERV, {user_timeline, Name}).
@@ -90,6 +96,16 @@ handle_call({get_access_token, Params}, _From,
         Error ->
             {reply, Error, State}
     end;
+handle_call({set_authorization, AuthData}, _From, State) ->
+    [Consumer, RParams, AParams] = AuthData,
+    NewState = State#state{consumer = Consumer,
+                           r_params = RParams,
+                           a_params = AParams
+                          },
+    {reply, ok, NewState};
+handle_call(get_authorization, _From, State) ->
+    Reply = [State#state.consumer, State#state.r_params, State#state.a_params],
+    {reply, Reply, State};
 handle_call(home_timeline, _From, State) ->
     call(home_timeline, [], State);
 handle_call({user_timeline, Name}, _From, State) ->
