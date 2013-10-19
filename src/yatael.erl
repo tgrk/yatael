@@ -157,7 +157,7 @@ call(Name, Params, #state{consumer = Consumer, a_params = AParams} = State) ->
                     {reply, {ok, Headers, response(Body)}, State};
                 ContentType ->
                     io:format("DEBUG: ContentType: ~p~n", [ContentType]),
-                    {reply, {ok, Headers, Body}, State}
+                    {reply, {ok, Headers, response(Body)}, State}
             end;
         {ok, Response} ->
             {reply, Response, State};
