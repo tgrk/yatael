@@ -31,11 +31,11 @@
 get_request_token() ->
     gen_server:call(?SERV, get_request_token, ?TIMEOUT).
 
-authorize_url(Token) ->
+get_authorize_url(Token) ->
     oauth:uri(get_url(authorize), [{"oauth_token", Token}]).
 
-get_access_token(Verifier) ->
-    gen_server:call(?SERV, {get_access_token, [{"oauth_verifier", Verifier}]}).
+verify_access_token(Verifier) ->
+    gen_server:call(?SERV, {verify_access_token, [{"oauth_verifier", Verifier}]}).
 
 deauthorize() ->
     gen_server:cast(?SERV, deauthorize).
@@ -85,7 +85,7 @@ handle_call(get_request_token, _From, #state{consumer = Consumer} = State) ->
         Error ->
             {reply, Error, State}
     end;
-handle_call({get_access_token, Params}, _From,
+handle_call({verify_access_token, Params}, _From,
             #state{consumer = Consumer, r_params = RParams} = State) ->
     case oauth_get(header, get_url(access_token), Params, Consumer,
                    oauth:token(RParams), oauth:token_secret(RParams)) of
