@@ -28,8 +28,8 @@
 %%%============================================================================
 %%% API
 %%%============================================================================
-get_request_token() ->
-    gen_server:call(?SERV, get_request_token, ?TIMEOUT).
+request_token() ->
+    gen_server:call(?SERV, request_token, ?TIMEOUT).
 
 get_authorize_url(Token) ->
     oauth:uri(get_url(authorize), [{"oauth_token", Token}]).
@@ -40,14 +40,17 @@ verify_access_token(Verifier) ->
 deauthorize() ->
     gen_server:cast(?SERV, deauthorize).
 
-get_timeline() ->
-    gen_server:call(?SERV, home_timeline).
-
 set_authorization(AuthData) ->
     gen_server:call(?SERV, {set_authorization, AuthData}).
 
 get_authorization() ->
     gen_server:call(?SERV, get_authorization).
+
+is_authorized() ->
+    gen_server:call(?SERV, is_authorized).
+
+get_timeline() ->
+    gen_server:call(?SERV, home_timeline).
 
 get_timeline(Name) ->
     gen_server:call(?SERV, {user_timeline, Name}).
@@ -74,7 +77,7 @@ stop() ->
 init([ConsumerKey, ConsumerSecret]) ->
   {ok, #state{consumer = {ConsumerKey, ConsumerSecret, hmac_sha1}}}.
 
-handle_call(get_request_token, _From, #state{consumer = Consumer} = State) ->
+handle_call(request_token, _From, #state{consumer = Consumer} = State) ->
     case oauth_get(header, get_url(request_token), [], Consumer, "", "") of
         {ok, Response = {{_, 200, _}, _, _}} ->
             RParams = oauth:params_decode(Response),
@@ -100,6 +103,10 @@ handle_call({set_authorization, AuthData}, _From, _State) ->
     {reply, ok, AuthData};
 handle_call(get_authorization, _From, State) ->
     {reply, State, State};
+handle_call(is_authorized, _From,
+            #state{consumer = Consumer, r_params = RParams} = State) ->
+    Reply = Consumer =:= undefined orelse RParams =:= undefined,
+    {reply, Reply, State};
 handle_call(home_timeline, _From, State) ->
     call(home_timeline, [], State);
 handle_call({user_timeline, Name}, _From, State) ->
