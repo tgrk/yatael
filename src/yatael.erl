@@ -104,8 +104,8 @@ handle_call({set_authorization, AuthData}, _From, _State) ->
 handle_call(get_authorization, _From, State) ->
     {reply, State, State};
 handle_call(is_authorized, _From,
-            #state{consumer = Consumer, r_params = RParams} = State) ->
-    Reply = Consumer =:= undefined orelse RParams =:= undefined,
+            #state{a_params = AParams, r_params = RParams} = State) ->
+    Reply = AParams =/= undefined andalso RParams =/= undefined,
     {reply, Reply, State};
 handle_call(home_timeline, _From, State) ->
     call(home_timeline, [], State);
