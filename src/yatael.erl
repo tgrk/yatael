@@ -2,6 +2,10 @@
 %%% @author Martin Wiso <tajgur@gmai.com>
 %%% @doc
 %%% Erlang library for Twitter API v1.1
+%%% TODO: * 3 legged oAuth
+%%%       * basic calls
+%%%       * stream api
+%%%
 %%% @end
 %%% Created : 3 Aug 2013 by Martin Wiso <tajgur@gmail.com>
 %%%----------------------------------------------------------------------------
@@ -99,14 +103,16 @@ handle_call({verify_access_token, Params}, _From,
         Error ->
             {reply, Error, State}
     end;
-handle_call({set_authorization, AuthData}, _From, _State) ->
-    {reply, ok, AuthData};
-handle_call(get_authorization, _From, State) ->
-    {reply, State, State};
+handle_call({set_authorization, {C, A, R}}, _From, State) ->
+    {reply, ok, State#state{consumer = C, a_params = A, r_params = R}};
+handle_call(get_authorization, _From,
+            #state{consumer = C, a_params = A, r_params = R} = State) ->
+    {reply, {C, A, R}, State};
 handle_call(is_authorized, _From,
-            #state{a_params = AParams, r_params = RParams} = State) ->
-    Reply = AParams =/= undefined andalso RParams =/= undefined,
-    {reply, Reply, State};
+            #state{a_params = undefined, r_params = undefined} = State) ->
+    {reply, false, State};
+handle_call(is_authorized, _From, State) ->
+    {reply, true, State};
 handle_call(home_timeline, _From, State) ->
     call(home_timeline, [], State);
 handle_call({user_timeline, Name}, _From, State) ->
@@ -114,6 +120,7 @@ handle_call({user_timeline, Name}, _From, State) ->
 handle_call({search, Query}, _From, State) ->
     call(search, [{q, Query}], State);
 handle_call(Request, _From, State) ->
+    lager:debug("handle call - request=~p, state=~p", [Request, State]),
     {reply, {unknown_request, Request}, State}.
 
 
