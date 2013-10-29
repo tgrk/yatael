@@ -120,7 +120,6 @@ handle_call({user_timeline, Name}, _From, State) ->
 handle_call({search, Query}, _From, State) ->
     call(search, [{q, Query}], State);
 handle_call(Request, _From, State) ->
-    lager:debug("handle call - request=~p, state=~p", [Request, State]),
     {reply, {unknown_request, Request}, State}.
 
 
