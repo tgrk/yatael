@@ -125,7 +125,7 @@ handle_call(get_authorization, _From,
             #state{consumer = C, a_params = A, r_params = R} = State) ->
     {reply, {C, A, R}, State};
 handle_call(is_authorized, _From,
-            #state{a_params = undefined, r_params = undefined} = State) ->
+            #state{a_params = undefined} = State) ->
     {reply, false, State};
 handle_call(is_authorized, _From, State) ->
     {reply, true, State};
