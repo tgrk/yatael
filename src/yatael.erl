@@ -179,7 +179,6 @@ call(Name, Params, #state{consumer = Consumer, a_params = AParams} = State) ->
                 undefined ->
                     {reply, {ok, Headers, response(Body)}, State};
                 ContentType ->
-                    io:format("DEBUG: ContentType: ~p~n", [ContentType]),
                     {reply, {ok, Headers, response(Body)}, State}
             end;
         {ok, Response} ->
