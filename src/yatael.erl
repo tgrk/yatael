@@ -14,6 +14,21 @@
 -behaviour(gen_server).
 
 %% API
+-export([request_token/0,
+         get_authorize_url/1,
+         verify_access_pin/1,
+         unauthorize/0,
+         is_authorized/0,
+         get_authorization/0,
+         set_authorization/1,
+
+         get_timeline/0,
+         get_timeline/1,
+         search/1,
+
+         start_link/2,
+         stop/0
+        ]).
 -compile(export_all).
 
 %% gen_server callbacks
@@ -38,11 +53,12 @@ request_token() ->
 get_authorize_url(Token) ->
     oauth:uri(get_url(authorize), [{"oauth_token", Token}]).
 
-verify_access_token(Verifier) ->
-    gen_server:call(?SERV, {verify_access_token, [{"oauth_verifier", Verifier}]}).
+verify_access_pin(PIN) ->
+    gen_server:call(?SERV,{verify_access_token,
+                           [{"oauth_verifier", to_list(PIN)}]}).
 
-deauthorize() ->
-    gen_server:cast(?SERV, deauthorize).
+unauthorize() ->
+    gen_server:cast(?SERV, unauthorize).
 
 set_authorization(AuthData) ->
     gen_server:call(?SERV, {set_authorization, AuthData}).
@@ -123,7 +139,7 @@ handle_call(Request, _From, State) ->
     {reply, {unknown_request, Request}, State}.
 
 
-handle_cast(deauthorize, #state{consumer = Consumer}) ->
+handle_cast(unauthorize, #state{consumer = Consumer}) ->
     {noreply, #state{consumer = Consumer}};
 handle_cast(stop, State) ->
     {stop, normal, State}.
@@ -203,3 +219,8 @@ start_dependencies() ->
 stop_dependencies() ->
     [application:stop(A) || A <- ?DEPS],
     ok.
+
+to_list(Val) when is_integer(Val) ->
+    integer_to_list(Val);
+to_list(Val) ->
+    Val.
