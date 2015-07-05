@@ -4,3 +4,4 @@ deps
 ebin/
 *.plt
 api.txt
+.rebar/
