@@ -38,6 +38,11 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
 
+%% Types
+-type headers()    :: list({string(), any()}).
+-type response()   :: {ok, headers(), map()}.
+-type query_args() :: list({atom(), any()}).
+
 -define(SERV,     ?MODULE).
 -define(DEPS,     [ssl, oauth, lhttpc]).
 -define(TIMEOUT,  1200000).
@@ -80,15 +85,19 @@ set_oauth_credentials(ConsumerKey, ConsumerSecret) ->
 get_oauth_credentials() ->
     gen_server:call(?SERV, get_oauth_credentials).
 
+-spec verify_credentials(query_args()) -> response().
 verify_credentials(Args) ->
     gen_server:call(?SERV, {verify_credentials, Args}, ?TIMEOUT).
 
+-spec get_timeline() -> response().
 get_timeline() ->
     gen_server:call(?SERV, home_timeline, ?TIMEOUT).
 
+-spec get_timeline(query_args()) -> response().
 get_timeline(Name) ->
     gen_server:call(?SERV, {user_timeline, Name}, ?TIMEOUT).
 
+-spec lookup_status(query_args()) -> response().
 lookup_status(Args) ->
     gen_server:call(?SERV, {lookup_status, Args}, ?TIMEOUT).
 
@@ -255,13 +264,6 @@ get_url(user_timeline) ->
     ?API_URL ++ "statuses/user_timeline.json";
 get_url(lookup_status) ->
     ?API_URL ++ "statuses/lookup.json".
-
-to_bin(Value) when is_list(Value) ->
-    list_to_binary(Value);
-to_bin(Value) when is_atom(Value) ->
-    atom_to_binary(Value, latin1);
-to_bin(Value) ->
-    Value.
 
 to_list(Val) when is_integer(Val) ->
     integer_to_list(Val);
