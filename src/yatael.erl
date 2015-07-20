@@ -209,7 +209,7 @@ call_api(access_token = UrlType, {OAuthToken, OAuthVerifier}, Map) ->
                                        to_list(OAuthSecretToken)),
     AccessTokenParams = oauth:params_decode(RequestResponse),
     NewMap = #{<<"access_token">>        => oauth:token(AccessTokenParams),
-               <<"token_access_secret">> => oauth:token_secret(AccessTokenParams)},
+               <<"access_token_secret">> => oauth:token_secret(AccessTokenParams)},
     maps:merge(Map, NewMap);
 call_api(UrlType, Args, Map) ->
     EndpointURI       = get_url(UrlType),
