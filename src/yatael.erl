@@ -140,7 +140,7 @@ handle_call({request_token, CallbackUri}, _From,
     {reply, ok, State#state{oauth_creds = maps:merge(Creds, Updates)}};
 handle_call(get_authorize_url, _From, #state{oauth_creds = Creds} = State) ->
     AuthenticateUrl = build_url(authenticate,
-                                [{oauth_token, maps:get(<<"token">>, Creds)}]),
+                                [{oauth_token, maps:get(<<"access_token">>, Creds)}]),
     {reply, {ok, AuthenticateUrl}, State};
 handle_call({get_access_token, OAuthToken, OAuthVerifier}, _From,
             #state{oauth_creds = Creds} = State) ->
