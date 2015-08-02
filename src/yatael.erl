@@ -203,7 +203,7 @@ call_api(request_token = UrlType, Args, Map) ->
 call_api(access_token = UrlType, {OAuthToken, OAuthVerifier}, Map) ->
     EndpointURI = get_url(UrlType),
     Args = [{oauth_verifier, to_list(OAuthVerifier)}],
-    OAuthSecretToken = maps:get(<<"token_secret">>, Map),
+    OAuthSecretToken = maps:get(<<"access_token">>, Map),
     {ok, RequestResponse} = oauth:post(EndpointURI, Args, get_consumer(Map),
                                        to_list(OAuthToken),
                                        to_list(OAuthSecretToken)),
