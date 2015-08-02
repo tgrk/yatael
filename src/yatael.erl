@@ -172,7 +172,7 @@ handle_call(home_timeline, _From,
     {reply, call_api(home_timeline, [], Creds), State};
 handle_call({user_timeline, Name}, _From,
             #state{oauth_creds = Creds} = State) ->
-    {reply, call_api(user_timeline, [{user, Name}], Creds), State};
+    {reply, call_api(user_timeline, [{screen_name, Name}], Creds), State};
 handle_call({lookup_status, Args}, _From,
             #state{oauth_creds = Creds} = State) ->
     {reply, call_api(lookup_status, Args, Creds), State};
