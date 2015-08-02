@@ -162,7 +162,7 @@ handle_call({verify_credentials, Args}, _From,
             #state{oauth_creds = Creds} = State) ->
     case call_api(verify_credentials, Args, Creds) of
         {ok, _Headers, Body}  ->
-            {reply, {ok, parse_json(Body)}, State};
+            {reply, {ok, Body}, State};
         Error ->
             {reply, Error, State}
     end;
