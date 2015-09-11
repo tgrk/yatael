@@ -40,7 +40,7 @@
 
 %% Types
 -type headers()    :: list({string(), any()}).
--type response()   :: {ok, headers(), map()}.
+-type response()   :: {ok, headers(), map() | list(map())}.
 -type query_args() :: list({atom(), any()}).
 
 -define(SERV,     ?MODULE).
@@ -93,7 +93,7 @@ verify_credentials(Args) ->
 get_timeline() ->
     gen_server:call(?SERV, home_timeline, ?TIMEOUT).
 
--spec get_timeline(query_args()) -> response().
+-spec get_timeline(binary()) -> response().
 get_timeline(Name) ->
     gen_server:call(?SERV, {user_timeline, Name}, ?TIMEOUT).
 
