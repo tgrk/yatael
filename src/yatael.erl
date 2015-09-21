@@ -155,9 +155,8 @@ handle_call({set_oauth_credentials, ConsumerKey, ConsumerSecret}, _From, State) 
               <<"consumer_secret">> => ConsumerSecret
              },
     {reply, ok, State#state{oauth_creds = Creds}};
-handle_call(get_oauth_credentials, _From,
-            #state{oauth_creds = Creds} = State) ->
-    {reply, {ok, State#state.oauth_creds}, Creds};
+handle_call(get_oauth_credentials, _From, State) ->
+    {reply, {ok, State#state.oauth_creds}, State};
 handle_call({verify_credentials, Args}, _From,
             #state{oauth_creds = Creds} = State) ->
     case call_api(verify_credentials, Args, Creds) of
@@ -166,7 +165,6 @@ handle_call({verify_credentials, Args}, _From,
         Error ->
             {reply, Error, State}
     end;
-
 handle_call(home_timeline, _From,
             #state{oauth_creds = Creds} = State) ->
     {reply, call_api(home_timeline, [], Creds), State};
