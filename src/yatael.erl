@@ -28,7 +28,6 @@
          get_timeline/1,
          lookup_status/1,
 
-
          start_link/0,
          start_link/2,
          stop/0
@@ -40,7 +39,8 @@
 
 %% Types
 -type headers()    :: list({string(), any()}).
--type response()   :: {ok, headers(), map() | list(map())}.
+-type payload()    :: map() | list(map()).
+-type response()   :: {ok, headers(), payload()} | {ok, payload()}.
 -type query_args() :: list({atom(), any()}).
 
 -define(SERV,     ?MODULE).
