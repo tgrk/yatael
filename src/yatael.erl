@@ -55,7 +55,7 @@
 %%%============================================================================
 %%% API
 %%%============================================================================
--spec request_token(binary()) -> ok | no_return().
+-spec request_token(string()) -> ok | no_return().
 request_token(CallbackURI) ->
     gen_server:call(?SERV, {request_token, CallbackURI}, ?TIMEOUT).
 
