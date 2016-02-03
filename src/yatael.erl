@@ -40,7 +40,7 @@
 %% Types
 -type headers()    :: list({string(), any()}).
 -type payload()    :: map() | list(map()).
--type response()   :: {ok, headers(), payload()} | {ok, payload()}.
+-type response()   :: {ok, headers(), payload()} | {ok, payload()} | {error, headers(), term()}.
 -type query_args() :: list({atom(), any()}).
 
 -define(SERV,     ?MODULE).
