@@ -1,37 +1,34 @@
-%%%----------------------------------------------------------------------------
+%%%-----------------------------------------------------------------------------
 %%% @author Martin Wiso <tajgur@gmail.com>
 %%% @doc
 %%% Erlang library for Twitter REST API v1.1
 %%% @end
-%%%----------------------------------------------------------------------------
+%%%-----------------------------------------------------------------------------
 -module(yatael).
 
 -behaviour(gen_server).
 
--ifdef(TEST).
--export([get_api_keys/0]).
--endif.
-
 %% API
--export([request_token/1,
-         get_authorize_url/0,
-         get_access_token/2,
-         unauthorize/0,
-         set_oauth_credentials/1,
-         set_oauth_credentials/2,
-         get_oauth_credentials/0,
+-export([  request_token/1
+         , get_authorize_url/0
+         , get_access_token/2
+         , unauthorize/0
+         , set_oauth_credentials/1
+         , set_oauth_credentials/2
+         , get_oauth_credentials/0
 
-         get_api_keys/0,
+         , verify_credentials/1
+         , get_timeline/0
+         , get_timeline/1
+         , lookup_status/1
 
-         verify_credentials/1,
-         get_timeline/0,
-         get_timeline/1,
-         lookup_status/1,
-
-         start_link/0,
-         start_link/2,
-         stop/0
+         , start_link/0
+         , start_link/2
+         , stop/0
         ]).
+
+%% Exported for testing
+-export([get_url/1]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -40,30 +37,30 @@
 %% Types
 -type headers()    :: list({string(), any()}).
 -type payload()    :: map() | list(map()).
--type response()   :: {ok, headers(), payload()} | {ok, payload()} | {error, headers(), term()}.
+-type response()   :: {ok, headers(), payload()} | {ok, payload()}
+                    | {error, headers(), term()}.
 -type query_args() :: list({atom(), any()}).
 
 -define(SERV,     ?MODULE).
--define(DEPS,     [ssl, oauth, lhttpc]).
 -define(TIMEOUT,  1200000).
 
 -define(API_URL,  "https://api.twitter.com/1.1/").
 -define(AUTH_URL, "https://api.twitter.com/oauth/").
 
--record(state, {oauth_creds :: map()}).
+-record(state, {oauth_creds = #{} :: map()}).
 
-%%%============================================================================
+%%%=============================================================================
 %%% API
-%%%============================================================================
--spec request_token(string()) -> ok | no_return().
+%%%=============================================================================
+-spec request_token(string() | binary()) -> ok | no_return().
 request_token(CallbackURI) ->
     gen_server:call(?SERV, {request_token, CallbackURI}, ?TIMEOUT).
 
--spec get_authorize_url() -> {ok, string()} | no_return().
+-spec get_authorize_url() -> {ok, binary()} | no_return().
 get_authorize_url() ->
     gen_server:call(?SERV, get_authorize_url, ?TIMEOUT).
 
--spec get_access_token(binary(), binary()) -> ok | no_return().
+-spec get_access_token(binary(), binary()) -> ok | {error, term()}.
 get_access_token(OAuthToken, OAuthVerifier) ->
     gen_server:call(?SERV, {get_access_token, OAuthToken, OAuthVerifier},
                     ?TIMEOUT).
@@ -104,28 +101,25 @@ lookup_status(Args) ->
 %% @doc Start an acquirer API service.
 -spec start_link() -> {ok, pid()} | {error, term()}.
 start_link() ->
-    [application:ensure_all_started(A) || A <- ?DEPS],
     gen_server:start_link({local, ?SERV}, ?MODULE, [], []).
 
 %% @doc Start an acquirer API service with credentials.
 -spec start_link(string(), string()) -> {ok, pid()} | {error, term()}.
 start_link(ConsumerKey, ConsumerSecret) ->
-    [application:ensure_all_started(A) || A <- ?DEPS],
     gen_server:start_link({local, ?SERV}, ?MODULE,
                           [ConsumerKey, ConsumerSecret], []).
 
 %% @doc Stop an acquirer API service.
 -spec stop() -> ok.
 stop() ->
-    [application:stop(A) || A <- ?DEPS],
     gen_server:cast(?SERV, stop).
 
-%%============================================================================
+%%==============================================================================
 %% gen_server callbacks
-%%============================================================================
+%%==============================================================================
 init([ConsumerKey, ConsumerSecret]) ->
-  {ok, #state{oauth_creds = #{<<"consumer_key">>    => ConsumerKey,
-                              <<"consumer_secret">> => ConsumerSecret
+  {ok, #state{oauth_creds = #{<<"consumer_key">>    => to_binary(ConsumerKey),
+                              <<"consumer_secret">> => to_binary(ConsumerSecret)
                              }}};
 init([]) ->
     {ok, #state{}}.
@@ -134,26 +128,34 @@ handle_call({request_token, CallbackUri}, _From,
             #state{oauth_creds = Creds} = State) ->
     Response = call_api(request_token, CallbackUri, Creds),
     error_logger:info_msg("yatael.request_token=~p", [Response]),
-    Updates = #{<<"callback_uri">>        => CallbackUri,
-                <<"access_token">>        => oauth:token(Response),
-                <<"access_token_secret">> => oauth:token_secret(Response)},
+    Updates = #{<<"callback_uri">>        =>
+                    to_binary(CallbackUri),
+                <<"access_token">>        =>
+                    to_binary(oauth:token(Response)),
+                <<"access_token_secret">> =>
+                    to_binary(oauth:token_secret(Response))},
     {reply, ok, State#state{oauth_creds = maps:merge(Creds, Updates)}};
 handle_call(get_authorize_url, _From, #state{oauth_creds = Creds} = State) ->
-    AuthenticateUrl = build_url(authorize,
-                                [{oauth_token, maps:get(<<"access_token">>, Creds)}]),
-    {reply, {ok, AuthenticateUrl}, State};
+    AuthenticateUrl = build_url(
+                        authorize,
+                        [{oauth_token, maps:get(<<"access_token">>, Creds)}]),
+    {reply, {ok, to_binary(AuthenticateUrl)}, State};
 handle_call({get_access_token, OAuthToken, OAuthVerifier}, _From,
             #state{oauth_creds = Creds} = State) ->
     Updates = call_api(access_token, {OAuthToken, OAuthVerifier}, Creds),
-    error_logger:info_msg("yatael.access_token=~p", [Updates]),
-    {reply, ok, State#state{oauth_creds = maps:merge(Creds, Updates)}};
+    case is_map(Updates) of
+        true ->
+            error_logger:info_msg("yatael.access_token=~p", [Updates]),
+            {reply, ok, State#state{oauth_creds = maps:merge(Creds, Updates)}};
+        false ->
+            {reply, Updates, State}
+    end;
 handle_call({set_oauth_credentials, Map}, _From,
             #state{oauth_creds = Creds} = State) when is_map(Map) ->
     {reply, ok, State#state{oauth_creds = maps:merge(Creds, Map)}};
 handle_call({set_oauth_credentials, ConsumerKey, ConsumerSecret}, _From, State) ->
     Creds = #{<<"consumer_key">>    => ConsumerKey,
-              <<"consumer_secret">> => ConsumerSecret
-             },
+              <<"consumer_secret">> => ConsumerSecret},
     {reply, ok, State#state{oauth_creds = Creds}};
 handle_call(get_oauth_credentials, _From, State) ->
     {reply, {ok, State#state.oauth_creds}, State};
@@ -191,47 +193,59 @@ code_change(_OldVsn, State, _Extra) ->
 terminate(normal, _State) ->
     ok.
 
-%%%============================================================================
+%%%=============================================================================
 %%% Internal functionality
-%%%============================================================================
+%%%=============================================================================
 call_api(request_token = UrlType, Args, Map) ->
-    {ok, Response} = oauth:post(get_url(UrlType),
-                                [{oauth_callback, Args}], get_consumer(Map)),
+    {ok, Response} = oauth:post(
+                       get_url(UrlType),
+                       [{oauth_callback, Args}], get_consumer(Map)),
     oauth:params_decode(Response);
 call_api(access_token = UrlType, {OAuthToken, OAuthVerifier}, Map) ->
     EndpointURI = get_url(UrlType),
     Args = [{oauth_verifier, to_list(OAuthVerifier)}],
-    OAuthSecretToken = maps:get(<<"access_token">>, Map),
-    {ok, RequestResponse} = oauth:post(EndpointURI, Args, get_consumer(Map),
-                                       to_list(OAuthToken),
-                                       to_list(OAuthSecretToken)),
-    AccessTokenParams = oauth:params_decode(RequestResponse),
-    NewMap = #{<<"access_token">>        => oauth:token(AccessTokenParams),
-               <<"access_token_secret">> => oauth:token_secret(AccessTokenParams)},
-    maps:merge(Map, NewMap);
+    OAuthSecretToken = maps:get(<<"access_token">>, Map, undefined),
+    case OAuthSecretToken =:= undefined of
+        true ->
+            {error, missing_access_token};
+        false ->
+            {ok, Response} = oauth:post(EndpointURI, Args, get_consumer(Map),
+                                        to_list(OAuthToken),
+                                        to_list(OAuthSecretToken)),
+            AccessParams = oauth:params_decode(Response),
+            NewMap = #{<<"access_token">> =>
+                           to_binary(oauth:token(AccessParams)),
+               <<"access_token_secret">>  =>
+                           to_binary(oauth:token_secret(AccessParams))},
+            maps:merge(Map, NewMap)
+    end;
 call_api(UrlType, Args, Map) ->
     EndpointURI       = get_url(UrlType),
-    AccessToken       = maps:get(<<"access_token">>, Map),
-    AccessTokenSecret = maps:get(<<"access_token_secret">>, Map),
-    case oauth:get(EndpointURI, Args, get_consumer(Map), AccessToken,
-              AccessTokenSecret) of
-        {ok, {{_HTTPVersion, 200, _Status}, Headers, Body}} ->
-            {ok, Headers, parse_json(Body)};
-        {ok, {{_HTTPVersion, Code, _Status}, Headers, Body}} ->
-            case Code < 400 of
-                true ->
+    AccessToken       = maps:get(<<"access_token">>, Map, undefined),
+    AccessTokenSecret = maps:get(<<"access_token_secret">>, Map, undefined),
+    case {AccessToken, AccessTokenSecret} of
+        {undefined, undefined} ->
+            {error, missing_credentials};
+        {_, undefined} ->
+            {error, missing_credentials};
+        {undefined, _} ->
+            {error, missing_credentials};
+        _ ->
+            case oauth:get(EndpointURI, Args, get_consumer(Map), AccessToken,
+                           AccessTokenSecret) of
+                {ok, {{_HTTPVersion, 200, _Status}, Headers, Body}} ->
                     {ok, Headers, parse_json(Body)};
-                false ->
-                    {error, Headers, parse_json(Body)}
-            end;
-        {error, Reason} ->
-            {error, [], Reason}
+                {ok, {{_HTTPVersion, Code, _Status}, Headers, Body}} ->
+                    case Code < 400 of
+                        true ->
+                            {ok, Headers, parse_json(Body)};
+                        false ->
+                            {error, Headers, parse_json(Body)}
+                    end;
+                {error, Reason} ->
+                    {error, [], Reason}
+            end
     end.
-
-get_api_keys() ->
-    {ok, [PL]} = file:consult("api.txt"),
-    {proplists:get_value(consumer_key, PL),
-     proplists:get_value(consumer_secret, PL)}.
 
 get_consumer(Map) ->
     {maps:get(<<"consumer_key">>, Map),
@@ -263,6 +277,14 @@ get_url(user_timeline) ->
 get_url(lookup_status) ->
     ?API_URL ++ "statuses/lookup.json".
 
+
+-spec to_binary(list() | binary()) -> binary().
+to_binary(L) when is_list(L) ->
+    list_to_binary(L);
+to_binary(B) when is_binary(B) ->
+   B.
+
+-spec to_list(list() | binary() | atom() | integer()) -> list().
 to_list(Val) when is_integer(Val) ->
     integer_to_list(Val);
 to_list(Value) when is_atom(Value) ->
