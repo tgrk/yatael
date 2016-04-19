@@ -19,19 +19,18 @@ authorize(Map) ->
     AccessToken = maps:get(<<"oauth_token">>, Map, undefined),
     Verifier    = maps:get(<<"oauth_verifier">>, Map, undefined),
     CallbackURI = maps:get(<<"callback_uri">>, Map, undefined),
-    case {AccessToken, Verifier, CallbackURI} of
-        {_, _, undefined} ->
-            {error, missing_callback_uri};
-        {undefined, _, _} ->
-            {error, missing_token};
-        {_, undefined, _} ->
-            {error, missing_verifier};
-        {undefined, undefined, _} ->
-            ok = yatael:request_token(CallbackURI),
-            {ok, Creds} = yatael:get_oauth_credentials(),
-            {ok, #{<<"oauth_token">> =>
-                       maps:get(<<"access_token">>, Creds)}};
-        {_, _, _} ->
+    case {AccessToken, Verifier} of
+        {undefined, undefined} ->
+            case CallbackURI =:= undefined of
+                true ->
+                    {error, missing_callback_uri};
+                false ->
+                    ok = yatael:request_token(CallbackURI),
+                    {ok, Creds} = yatael:get_oauth_credentials(),
+                    {ok, #{<<"oauth_token">> =>
+                               maps:get(<<"access_token">>, Creds)}}
+            end;
+        {_, _} ->
             case yatael:get_access_token(AccessToken, Verifier) of
                 ok ->
                     yatael:verify_credentials([{skip_status, true}]);

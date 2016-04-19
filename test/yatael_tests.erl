@@ -84,18 +84,10 @@ test_mock_auth() ->
 
 test_auth_helper() ->
     ?assertEqual({error, missing_callback_uri}, yatael_auth:authorize(#{})),
-    ?assertEqual({error, missing_verifier},
-                 yatael_auth:authorize(#{<<"oauth_token">> => <<"foo">>,
-                                        <<"callback_uri">> => <<"http">>})),
-    ?assertEqual({error, missing_token},
-                 yatael_auth:authorize(#{<<"oauth_verifier">> => <<"bar">>,
-                                        <<"callback_uri">>    => <<"http">>})),
-
     ReqMap = #{<<"oauth_token">>    => <<"fUE2_gAAAAAASpgSAAABVCkvSyA">>,
                <<"oauth_verifier">> => <<"BIfqu0wreL52b9Us3EDlvBQhBQVPBzdE">>,
                <<"callback_uri">>   => <<"http">>},
-    R = yatael_auth:authorize(ReqMap),
-    ?debugFmt("result=~p", [R]),
+    ?assertEqual({error, missing_access_token}, yatael_auth:authorize(ReqMap)),
     ok.
 
 test_mock_timeline() ->
