@@ -179,6 +179,9 @@ handle_call({lookup_status, Args}, _From,
 handle_call(Request, _From, State) ->
     {reply, {unknown_request, Request}, State}.
 
+handle_cast(unauthorize, #state{oauth_creds = Creds} = State) ->
+    Creds1 = maps:with([<<"consumer_key">>, <<"consumer_secret">>], Creds),
+    {noreply, State#state{oauth_creds = Creds1}};
 handle_cast(unauthorize, State) ->
     {noreply, State#state{oauth_creds = maps:new()}};
 handle_cast(stop, State) ->
