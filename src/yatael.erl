@@ -20,7 +20,9 @@
          , verify_credentials/1
          , get_timeline/0
          , get_timeline/1
+         , get_mentions_timeline/1
          , lookup_status/1
+         , search/1
 
          , start_link/0
          , start_link/2
@@ -39,7 +41,7 @@
 -type payload()    :: map() | list(map()).
 -type response()   :: {ok, headers(), payload()} | {ok, payload()}
                     | {error, headers(), term()}.
--type query_args() :: list({atom(), any()}).
+-type query_args() :: list({atom(), any()}) | map().
 
 -define(SERV,     ?MODULE).
 -define(TIMEOUT,  1200000).
@@ -51,6 +53,22 @@
 
 %%%=============================================================================
 %%% API
+%%%=============================================================================
+-spec start_link() -> {ok, pid()} | {error, term()}.
+start_link() ->
+    gen_server:start_link({local, ?SERV}, ?MODULE, [], []).
+
+-spec start_link(string(), string()) -> {ok, pid()} | {error, term()}.
+start_link(ConsumerKey, ConsumerSecret) ->
+    gen_server:start_link({local, ?SERV}, ?MODULE,
+                          [ConsumerKey, ConsumerSecret], []).
+
+-spec stop() -> ok.
+stop() ->
+    gen_server:cast(?SERV, stop).
+
+%%%=============================================================================
+%%% oAuth API
 %%%=============================================================================
 -spec request_token(string() | binary()) -> ok | no_return().
 request_token(CallbackURI) ->
@@ -86,6 +104,9 @@ get_oauth_credentials() ->
 verify_credentials(Args) ->
     gen_server:call(?SERV, {verify_credentials, Args}, ?TIMEOUT).
 
+%%%=============================================================================
+%%% Data API
+%%%=============================================================================
 -spec get_timeline() -> response().
 get_timeline() ->
     gen_server:call(?SERV, home_timeline, ?TIMEOUT).
@@ -94,25 +115,18 @@ get_timeline() ->
 get_timeline(Name) ->
     gen_server:call(?SERV, {user_timeline, Name}, ?TIMEOUT).
 
+-spec get_mentions_timeline(query_args()) -> response().
+get_mentions_timeline(Args) ->
+    gen_server:call(?SERV, {mentions_timeline, Args}, ?TIMEOUT).
+
 -spec lookup_status(query_args()) -> response().
 lookup_status(Args) ->
     gen_server:call(?SERV, {lookup_status, Args}, ?TIMEOUT).
 
-%% @doc Start an acquirer API service.
--spec start_link() -> {ok, pid()} | {error, term()}.
-start_link() ->
-    gen_server:start_link({local, ?SERV}, ?MODULE, [], []).
+-spec search(query_args()) -> response().
+search(Args) ->
+    gen_server:call(?SERV, {search, Args}, ?TIMEOUT).
 
-%% @doc Start an acquirer API service with credentials.
--spec start_link(string(), string()) -> {ok, pid()} | {error, term()}.
-start_link(ConsumerKey, ConsumerSecret) ->
-    gen_server:start_link({local, ?SERV}, ?MODULE,
-                          [ConsumerKey, ConsumerSecret], []).
-
-%% @doc Stop an acquirer API service.
--spec stop() -> ok.
-stop() ->
-    gen_server:cast(?SERV, stop).
 
 %%==============================================================================
 %% gen_server callbacks
@@ -173,9 +187,16 @@ handle_call(home_timeline, _From,
 handle_call({user_timeline, Name}, _From,
             #state{oauth_creds = Creds} = State) ->
     {reply, call_api(user_timeline, [{screen_name, Name}], Creds), State};
+handle_call({mentions_timeline, Args}, _From,
+            #state{oauth_creds = Creds} = State) ->
+    {reply, call_api(mentions_timeline, Args, Creds), State};
 handle_call({lookup_status, Args}, _From,
             #state{oauth_creds = Creds} = State) ->
     {reply, call_api(lookup_status, Args, Creds), State};
+handle_call({search, Args}, _From,
+            #state{oauth_creds = Creds} = State) ->
+    {reply, call_api(search, Args, Creds), State};
+
 handle_call(Request, _From, State) ->
     {reply, {unknown_request, Request}, State}.
 
@@ -218,7 +239,7 @@ call_api(access_token = UrlType, {OAuthToken, OAuthVerifier}, Map) ->
             AccessParams = oauth:params_decode(Response),
             NewMap = #{<<"access_token">> =>
                            to_binary(oauth:token(AccessParams)),
-               <<"access_token_secret">>  =>
+                       <<"access_token_secret">>  =>
                            to_binary(oauth:token_secret(AccessParams))},
             maps:merge(Map, NewMap)
     end;
@@ -277,9 +298,12 @@ get_url(home_timeline) ->
     ?API_URL ++ "statuses/home_timeline.json";
 get_url(user_timeline) ->
     ?API_URL ++ "statuses/user_timeline.json";
+get_url(mentions_timeline) ->
+    ?API_URL ++ "statuses/mentions_timeline.json";
 get_url(lookup_status) ->
-    ?API_URL ++ "statuses/lookup.json".
-
+    ?API_URL ++ "statuses/lookup.json";
+get_url(search) ->
+    ?API_URL ++ "search/tweets.json".
 
 -spec to_binary(list() | binary()) -> binary().
 to_binary(L) when is_list(L) ->
