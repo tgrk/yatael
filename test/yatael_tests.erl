@@ -17,12 +17,13 @@ yatael_test_() ->
      fun setup/0,
      fun terminate/1,
      [
-       {"Authorization",                 fun test_auth/0}
-     , {"Authorization helper",          fun test_auth_helper/0}
-     , {"Unauthorized retrieve call",    fun test_unauth/0}
-     , {"Mocked Authorization",          fun test_mock_auth/0}
-     , {"Mocked API call timeline",      fun test_mock_timeline/0}
-     , {"Mocked API call lookup status", fun test_mock_lookup/0}
+       {"Authorization",                   fun test_auth/0}
+     , {"Authorization helper",            fun test_auth_helper/0}
+     , {"Unauthorized retrieve call",      fun test_unauth/0}
+     , {"Mocked API call - authorization", fun test_mock_auth/0}
+     , {"Mocked API call - timeline",      fun test_mock_timeline/0}
+     , {"Mocked API call - lookup status", fun test_mock_lookup/0}
+     , {"Mocked API call - search",        fun test_mock_search/0}
      ]
     }.
 
@@ -110,7 +111,18 @@ test_mock_lookup() ->
         ?assertEqual(true, meck:validate(httpc)),
 
         ok = meck:expect(httpc, request, match_expect(lookup_status)),
-        ?assertMatch({ok, _, _}, yatael:lookup_status([foo, bar]))
+        ?assertMatch({ok, _, _}, yatael:lookup_status(#{foo=>bar}))
+    after
+        meck:unload(httpc)
+    end.
+
+test_mock_search() ->
+    meck:new(httpc, [passthrough]),
+    try
+        ?assertEqual(true, meck:validate(httpc)),
+
+        ok = meck:expect(httpc, request, match_expect(search)),
+        ?assertMatch({ok, _, _}, yatael:search(#{<<"q">> => <<"noisesearch">>}))
     after
         meck:unload(httpc)
     end.
@@ -123,7 +135,7 @@ test_unauth() ->
 %%% Internal functionality
 %%%============================================================================
 read_api_keys() ->
-    case file:consult("../api.txt") of
+    case file:consult("api.txt") of
         {ok,[PL]} ->
             {proplists:get_value(consumer_key, PL),
              proplists:get_value(consumer_secret, PL)};
