@@ -30,7 +30,7 @@
         ]).
 
 %% Exported for testing
--export([get_url/1]).
+-export([get_url/1, test/1]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -70,7 +70,7 @@ stop() ->
 %%%=============================================================================
 %%% oAuth API
 %%%=============================================================================
--spec request_token(string() | binary()) -> ok | no_return().
+-spec request_token(string() | binary()) -> ok | {error, term()}.
 request_token(CallbackURI) ->
     gen_server:call(?SERV, {request_token, CallbackURI}, ?TIMEOUT).
 
@@ -127,7 +127,6 @@ lookup_status(Args) ->
 search(Args) ->
     gen_server:call(?SERV, {search, Args}, ?TIMEOUT).
 
-
 %%==============================================================================
 %% gen_server callbacks
 %%==============================================================================
@@ -139,10 +138,14 @@ init([]) ->
 
 handle_call({request_token, CallbackUri}, _From,
             #state{oauth_creds = Creds} = State) ->
-    Response = call_api(request_token, CallbackUri, Creds),
-    Updates  = build_access_token(Response),
-    Updates1 = maps:put(<<"callback_uri">>, to_bin(CallbackUri), Updates),
-    {reply, ok, State#state{oauth_creds = maps:merge(Creds, Updates1)}};
+    case call_api(request_token, CallbackUri, Creds) of
+        {ok, Response} ->
+            Updates  = build_access_token(Response),
+            Updates1 = maps:put(<<"callback_uri">>, to_bin(CallbackUri), Updates),
+            {reply, ok, State#state{oauth_creds = maps:merge(Creds, Updates1)}};
+        Error ->
+            Error
+    end;
 handle_call(get_authorize_url, _From, #state{oauth_creds = Creds} = State) ->
     AuthenticateUrl = build_url(
                         authorize,
@@ -209,14 +212,34 @@ code_change(_OldVsn, State, _Extra) ->
 terminate(normal, _State) ->
     ok.
 
+test(1) ->
+    {ok, [PL]} = file:consult("api.txt"),
+    CK = proplists:get_value(consumer_key, PL),
+    CS = proplists:get_value(consumer_secret, PL),
+    error_logger:info_msg("yatael.api.creds=~p", [{CK, CS}]),
+    {ok, Pid} = yatael:start_link(CS, CK),
+    error_logger:info_msg("yatael.api.client.pid=~p", [Pid]),
+    ok = yatael:request_token(<<"http://127.0.0.1/">>),
+    {ok, Url} = yatael:get_authorize_url(),
+    Url;
+test({Tokem, Verifier}) ->
+    ok = yatael:get_access_token(Tokem, Verifier),
+    yatael:get_oauth_credentials();
+test(Query) ->
+    yatael:search(#{<<"q">> => Query}).
+
 %%%=============================================================================
 %%% Internal functionality
 %%%=============================================================================
 call_api(request_token = UrlType, Args, Map) ->
-    {ok, Response} = oauth:post(
-                       get_url(UrlType),
-                       [{oauth_callback, Args}], get_creds(Map)),
-    oauth:params_decode(Response);
+    {ok, {{_, Code, _}, _, Response}}
+        = oauth:post(get_url(UrlType), [{oauth_callback, Args}], get_creds(Map)),
+    case Code > 400 of
+        true ->
+            {error, parse_json(Response)};
+        false ->
+            {ok, oauth:params_decode(Response)}
+    end;
 call_api(access_token = UrlType, {OAuthToken, OAuthVerifier}, Map) ->
     EndpointURI = get_url(UrlType),
     Args = [{oauth_verifier, to_list(OAuthVerifier)}],
@@ -237,9 +260,11 @@ call_api(UrlType, Args, Map) ->
     AccessTokenSecret = maps:get(<<"access_token_secret">>, Map, undefined),
     case validate_credentials(Map) of
         {ok, {AccessToken, AccessTokenSecret}} ->
-    error_logger:info_msg("yatael.api.call=~s", [EndpointURI]),
-            case oauth:get(EndpointURI, flatten_args(Args), get_creds(Map), AccessToken,
-                           AccessTokenSecret) of
+            error_logger:info_msg("yatael.api.call=~s", [EndpointURI]),
+            R = oauth:get(EndpointURI, flatten_args(Args), get_creds(Map), AccessToken,
+                          AccessTokenSecret),
+            error_logger:info_msg("yatael.api.respons=~s", [R]),
+            case R of
                 {ok, {{_HTTPVersion, 200, _Status}, Headers, Body}} ->
                     {ok, Headers, parse_json(Body)};
                 {ok, {{_HTTPVersion, Code, _Status}, Headers, Body}} ->
