@@ -8,7 +8,7 @@ case erlang:function_exported(rebar3, main, 1) of
         Deps = [{jiffy, "",
                  {git, "https://github.com/davisp/jiffy.git", {tag, "0.14.7"}}},
                 {oauth, "",
-                 {git, "https://github.com/tgrk/erlang-oauth.git", {tag, "v1.5.0"}}},
+                 {git, "https://github.com/tgrk/erlang-oauth.git", {tag, "v1.6.0"}}},
                 {meck, "0.*",
                  {git, "https://github.com/eproxus/meck.git", {tag, "0.8.4"}}},
                 {eunit_formatters, ".*",
