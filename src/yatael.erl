@@ -30,7 +30,7 @@
         ]).
 
 %% Exported for testing
--export([get_url/1, test/1]).
+-export([get_url/1]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -43,8 +43,8 @@
                     | {error, headers(), term()}.
 -type query_args() :: list({atom(), any()}) | map().
 
--define(SERV,     ?MODULE).
--define(TIMEOUT,  1200000).
+-define(SERV,    ?MODULE).
+-define(TIMEOUT, 1200000).
 
 -define(API_URL,  "https://api.twitter.com/1.1/").
 -define(AUTH_URL, "https://api.twitter.com/oauth/").
@@ -130,11 +130,11 @@ search(Args) ->
 %%==============================================================================
 %% gen_server callbacks
 %%==============================================================================
+init([]) ->
+    {ok, #state{}};
 init([ConsumerKey, ConsumerSecret]) ->
     Creds = build_creds(ConsumerKey, ConsumerSecret),
-    {ok, #state{oauth_creds = Creds}};
-init([]) ->
-    {ok, #state{}}.
+    {ok, #state{oauth_creds = Creds}}.
 
 handle_call({request_token, CallbackUri}, _From,
             #state{oauth_creds = Creds} = State) ->
@@ -143,8 +143,8 @@ handle_call({request_token, CallbackUri}, _From,
             Updates  = build_access_token(Response),
             Updates1 = maps:put(<<"callback_uri">>, to_bin(CallbackUri), Updates),
             {reply, ok, State#state{oauth_creds = maps:merge(Creds, Updates1)}};
-        Error ->
-            Error
+        {error, _Reason} = Error ->
+            {reply, Error, State}
     end;
 handle_call(get_authorize_url, _From, #state{oauth_creds = Creds} = State) ->
     AuthenticateUrl = build_url(
@@ -212,111 +212,70 @@ code_change(_OldVsn, State, _Extra) ->
 terminate(normal, _State) ->
     ok.
 
-test(1) ->
-    {ok, [PL]} = file:consult("api.txt"),
-    CK = proplists:get_value(consumer_key, PL),
-    CS = proplists:get_value(consumer_secret, PL),
-    error_logger:info_msg("yatael.api.creds=~p", [{CK, CS}]),
-    {ok, Pid} = yatael:start_link(CS, CK),
-    error_logger:info_msg("yatael.api.client.pid=~p", [Pid]),
-    ok = yatael:request_token(<<"http://127.0.0.1/">>),
-    {ok, Url} = yatael:get_authorize_url(),
-    Url;
-test({Tokem, Verifier}) ->
-    ok = yatael:get_access_token(Tokem, Verifier),
-    yatael:get_oauth_credentials();
-test(Query) ->
-    yatael:search(#{<<"q">> => Query}).
-
 %%%=============================================================================
 %%% Internal functionality
 %%%=============================================================================
-call_api(request_token = UrlType, Args, Map) ->
-    {ok, {{_, Code, _}, _, Response}}
-        = oauth:post(get_url(UrlType), [{oauth_callback, Args}], get_creds(Map)),
-    case Code > 400 of
-        true ->
-            {error, parse_json(Response)};
-        false ->
-            {ok, oauth:params_decode(Response)}
-    end;
+call_api(request_token = UrlType, CallbackUri, Map) ->
+    Args = [{oauth_callback, CallbackUri}],
+    parse_httpc_response(params, oauth:post(get_url(UrlType), Args, get_creds(Map)));
 call_api(access_token = UrlType, {OAuthToken, OAuthVerifier}, Map) ->
-    EndpointURI = get_url(UrlType),
-    Args = [{oauth_verifier, to_list(OAuthVerifier)}],
     case validate_access_token(Map) of
         {ok, OAuthSecretToken} ->
+            EndpointURI = get_url(UrlType),
+            VerifierArg = [{oauth_verifier, to_list(OAuthVerifier)}],
             error_logger:info_msg("yatael.api.call=~s", [EndpointURI]),
-            {ok, Response} = oauth:post(EndpointURI, Args, get_creds(Map),
-                                        to_list(OAuthToken),
-                                        to_list(OAuthSecretToken)),
-            NewParamsMap = build_access_token(oauth:params_decode(Response)),
-            maps:merge(Map, NewParamsMap);
+            Response = oauth:post(EndpointURI, VerifierArg, get_creds(Map),
+                                  to_list(OAuthToken),
+                                  to_list(OAuthSecretToken)),
+            {ok, Params} = parse_httpc_response(params, Response),
+            maps:merge(Map, build_access_token(Params));
         Error ->
             Error
     end;
 call_api(UrlType, Args, Map) ->
-    EndpointURI       = get_url(UrlType),
-    AccessToken       = maps:get(<<"access_token">>, Map, undefined),
-    AccessTokenSecret = maps:get(<<"access_token_secret">>, Map, undefined),
     case validate_credentials(Map) of
         {ok, {AccessToken, AccessTokenSecret}} ->
+            EndpointURI = get_url(UrlType),
             error_logger:info_msg("yatael.api.call=~s", [EndpointURI]),
-            R = oauth:get(EndpointURI, flatten_args(Args), get_creds(Map), AccessToken,
-                          AccessTokenSecret),
-            error_logger:info_msg("yatael.api.respons=~s", [R]),
-            case R of
-                {ok, {{_HTTPVersion, 200, _Status}, Headers, Body}} ->
-                    {ok, Headers, parse_json(Body)};
-                {ok, {{_HTTPVersion, Code, _Status}, Headers, Body}} ->
-                    case Code < 400 of
-                        true ->
-                            {ok, Headers, parse_json(Body)};
-                        false ->
-                            {error, Headers, parse_json(Body)}
-                    end;
-                {error, Reason} ->
-                    {error, [], Reason}
-            end;
+            Response = oauth:get(EndpointURI, flatten_args(Args), get_creds(Map),
+                                 AccessToken, AccessTokenSecret),
+            error_logger:info_msg("yatael.api.respons=~s", [Response]),
+            parse_httpc_response(json, Response);
         Error ->
             Error
     end.
 
-validate_access_token(Map) ->
-    OAuthSecretToken = maps:get(<<"access_token">>, Map, undefined),
-    case OAuthSecretToken =:= undefined of
-        true ->
-            {error, missing_access_token};
-        false ->
-            {ok, OAuthSecretToken}
-    end.
+validate_access_token(Map) when is_map(Map) ->
+    validate_access_token(get_access_token(Map));
+validate_access_token(undefined) ->
+    {error, missing_access_token};
+validate_access_token(OAuthSecretToken) ->
+    {ok, OAuthSecretToken}.
 
 validate_credentials(Map) ->
-    AccessToken       = maps:get(<<"access_token">>, Map, undefined),
-    AccessTokenSecret = maps:get(<<"access_token_secret">>, Map, undefined),
-    case {AccessToken, AccessTokenSecret} of
-        {undefined, undefined} ->
-            {error, missing_credentials};
-        {_, undefined} ->
-            {error, missing_credentials};
-        {undefined, _} ->
-            {error, missing_credentials};
-        Creds ->
-            {ok, Creds}
-    end.
+    validate_credentials(
+      get_access_token(Map), get_access_token_secret(Map)).
+
+validate_credentials(undefined, undefined) ->
+    {error, missing_credentials};
+validate_credentials(_, undefined) ->
+    {error, missing_credentials};
+validate_credentials(undefined, _) ->
+    {error, missing_credentials};
+validate_credentials(AccessToken, AccessTokenSecret) ->
+    {ok, {AccessToken, AccessTokenSecret}}.
 
 build_creds(ConsumerKey, ConsumerSecret) ->
     #{<<"consumer_key">>    => to_bin(ConsumerKey),
-      <<"consumer_secret">> => to_bin(ConsumerSecret)
-     }.
+      <<"consumer_secret">> => to_bin(ConsumerSecret)}.
 
 get_creds(Map) ->
-    {maps:get(<<"consumer_key">>, Map),
-     maps:get(<<"consumer_secret">>, Map), hmac_sha1}.
+    {to_list(maps:get(<<"consumer_key">>, Map)),
+     to_list(maps:get(<<"consumer_secret">>, Map)), hmac_sha1}.
 
 build_access_token(AccessParams) ->
-    #{<<"access_token">> => to_bin(oauth:token(AccessParams)),
-      <<"access_token_secret">>  => to_bin(oauth:token_secret(AccessParams))
-     }.
+    #{<<"access_token">>        => to_bin(oauth:token(AccessParams)),
+      <<"access_token_secret">> => to_bin(oauth:token_secret(AccessParams))}.
 
 parse_json(Response) ->
     jiffy:decode(unicode:characters_to_binary(Response), [return_maps]).
@@ -328,8 +287,12 @@ flatten_args(Args) when is_map(Args) ->
     flatten_args(maps:to_list(Args));
 flatten_args(Args) ->
     string:join(
-      [http_uri:encode(to_list(K)) ++ "=" ++ http_uri:encode(to_list(V))
-       || {K,V} <- Args], "&").
+      [encode_arg(K) ++ "=" ++ encode_arg(V) || {K,V} <- Args], "&").
+
+encode_arg(Value) when is_list(Value) ->
+    encode_arg(Value);
+encode_arg(Value) ->
+    http_uri:encode(to_list(Value)).
 
 get_url(request_token) ->
     ?AUTH_URL ++ "request_token";
@@ -350,13 +313,11 @@ get_url(lookup_status) ->
 get_url(search) ->
     ?API_URL ++ "search/tweets.json".
 
--spec to_bin(list() | binary()) -> binary().
 to_bin(L) when is_list(L) ->
     list_to_binary(L);
 to_bin(B) when is_binary(B) ->
    B.
 
--spec to_list(list() | binary() | atom() | integer()) -> list().
 to_list(Val) when is_integer(Val) ->
     integer_to_list(Val);
 to_list(Value) when is_atom(Value) ->
@@ -365,3 +326,33 @@ to_list(Value) when is_binary(Value) ->
     binary_to_list(Value);
 to_list(Val) ->
     Val.
+
+parse_httpc_response(Type, Reply) ->
+    {ok, {{_Version, Code, _Status}, Headers, Body}} = Reply,
+    case Code of
+        200 ->
+            type_specific_reply(Type, Reply);
+        304 ->
+            {ok, not_modified};
+        _ErrorCode ->
+           {error, {Code, Headers, parse_json(Body)}}
+    end.
+
+type_specific_reply(params, {ok, Response}) ->
+    {ok, parse_payload(params, Response)};
+type_specific_reply(json, {ok, {_, Headers, Body}}) ->
+    {ok, Headers, parse_payload(json, Body)}.
+
+parse_payload(json, Response) ->
+    parse_json(Response);
+parse_payload(params, Response) ->
+    oauth:params_decode(Response).
+
+get_access_token(Map) ->
+    get_value(<<"access_token">>, Map).
+
+get_access_token_secret(Map) ->
+    get_value(<<"access_token_secret">>, Map).
+
+get_value(Key, Map) ->
+    maps:get(Key, Map, undefined).
