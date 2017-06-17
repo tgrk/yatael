@@ -43,8 +43,11 @@
                     | {error, headers(), term()}.
 -type query_args() :: list({atom(), any()}) | map().
 
--define(SERV,    ?MODULE).
--define(TIMEOUT, 1200000).
+-define(SERV,        ?MODULE).
+-define(TIMEOUT,     1200000).
+-define(SEARCH_ARGS, [<<"q">>, <<"result_type">>, <<"geocode">>, <<"lang">>,
+                      <<"count">>, <<"until">>, <<"since_id">>, <<"max_id">>
+                     ]).
 
 -define(API_URL,  "https://api.twitter.com/1.1/").
 -define(AUTH_URL, "https://api.twitter.com/oauth/").
@@ -190,7 +193,8 @@ handle_call({lookup_status, Args}, _From,
     {reply, call_api(lookup_status, Args, Creds), State};
 handle_call({search, Args}, _From,
             #state{oauth_creds = Creds} = State) ->
-    {reply, call_api(search, Args, Creds), State};
+    Query = flatten_search_args(Args),
+    {reply, call_api(search, Query, Creds), State};
 
 handle_call(Request, _From, State) ->
     {reply, {unknown_request, Request}, State}.
@@ -217,16 +221,16 @@ terminate(normal, _State) ->
 %%%=============================================================================
 call_api(request_token = UrlType, CallbackUri, Map) ->
     Args = [{oauth_callback, CallbackUri}],
-    parse_httpc_response(params, oauth:post(get_url(UrlType), Args, get_creds(Map)));
+    parse_httpc_response(
+      params, oauth:post(get_url(UrlType), Args, oauth_creds(Map)));
 call_api(access_token = UrlType, {OAuthToken, OAuthVerifier}, Map) ->
     case validate_access_token(Map) of
         {ok, OAuthSecretToken} ->
             EndpointURI = get_url(UrlType),
             VerifierArg = [{oauth_verifier, to_list(OAuthVerifier)}],
             error_logger:info_msg("yatael.api.call=~s", [EndpointURI]),
-            Response = oauth:post(EndpointURI, VerifierArg, get_creds(Map),
-                                  to_list(OAuthToken),
-                                  to_list(OAuthSecretToken)),
+            Response = oauth_post(UrlType, VerifierArg, Map, OAuthToken,
+                                  OAuthSecretToken),
             {ok, Params} = parse_httpc_response(params, Response),
             maps:merge(Map, build_access_token(Params));
         Error ->
@@ -237,13 +241,21 @@ call_api(UrlType, Args, Map) ->
         {ok, {AccessToken, AccessTokenSecret}} ->
             EndpointURI = get_url(UrlType),
             error_logger:info_msg("yatael.api.call=~s", [EndpointURI]),
-            Response = oauth:get(EndpointURI, flatten_args(Args), get_creds(Map),
+            Response = oauth_get(UrlType, flatten_args(Args), Map,
                                  AccessToken, AccessTokenSecret),
             error_logger:info_msg("yatael.api.respons=~s", [Response]),
             parse_httpc_response(json, Response);
         Error ->
             Error
     end.
+
+oauth_get(UrlType, Args, Creds, AccessToken, AccessTokenSecret) ->
+    oauth:get(get_url(UrlType), Args, oauth_creds(Creds),
+              to_list(AccessToken), to_list(AccessTokenSecret)).
+
+oauth_post(UrlType, Args, Creds, AccessToken, AccessTokenSecret) ->
+    oauth:post(get_url(UrlType), Args, oauth_creds(Creds),
+               to_list(AccessToken), to_list(AccessTokenSecret)).
 
 validate_access_token(Map) when is_map(Map) ->
     validate_access_token(get_access_token(Map));
@@ -265,17 +277,22 @@ validate_credentials(undefined, _) ->
 validate_credentials(AccessToken, AccessTokenSecret) ->
     {ok, {AccessToken, AccessTokenSecret}}.
 
+oauth_creds(Map) ->
+    {to_list(maps:get(<<"consumer_key">>, Map)),
+     to_list(maps:get(<<"consumer_secret">>, Map)), hmac_sha1}.
+
 build_creds(ConsumerKey, ConsumerSecret) ->
     #{<<"consumer_key">>    => to_bin(ConsumerKey),
       <<"consumer_secret">> => to_bin(ConsumerSecret)}.
 
-get_creds(Map) ->
-    {to_list(maps:get(<<"consumer_key">>, Map)),
-     to_list(maps:get(<<"consumer_secret">>, Map)), hmac_sha1}.
-
 build_access_token(AccessParams) ->
     #{<<"access_token">>        => to_bin(oauth:token(AccessParams)),
       <<"access_token_secret">> => to_bin(oauth:token_secret(AccessParams))}.
+
+flatten_search_args(Args) when is_map(Args) ->
+    flatten_args(maps:with(?SEARCH_ARGS, Args));
+flatten_search_args(Args) ->
+    Args.
 
 parse_json(Response) ->
     jiffy:decode(unicode:characters_to_binary(Response), [return_maps]).
