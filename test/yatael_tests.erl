@@ -40,7 +40,6 @@ test_auth() ->
     ?assertEqual(ok, yatael:request_token(<<"http://127.0.0.1/">>)),
 
     {ok, Creds} = yatael:get_oauth_credentials(),
-    ?debugFmt("result=~p", [Creds]),
 
     ?assert(maps:is_key(<<"access_token">>, Creds)),
     ?assert(maps:is_key(<<"consumer_key">>, Creds)),
@@ -85,8 +84,8 @@ test_mock_auth() ->
 
 test_auth_helper() ->
     ?assertEqual({error, missing_callback_uri}, yatael_auth:authorize(#{})),
-    ReqMap = #{<<"oauth_token">>    => <<"fUE2_gAAAAAASpgSAAABVCkvSyA">>,
-               <<"oauth_verifier">> => <<"BIfqu0wreL52b9Us3EDlvBQhBQVPBzdE">>,
+    ReqMap = #{<<"oauth_token">>    => <<"foobar">>,
+               <<"oauth_verifier">> => <<"bar_verifier">>,
                <<"callback_uri">>   => <<"http">>},
     ?assertEqual({error, missing_access_token}, yatael_auth:authorize(ReqMap)),
     ok.

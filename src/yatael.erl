@@ -45,12 +45,11 @@
 
 -define(SERV,        ?MODULE).
 -define(TIMEOUT,     1200000).
+-define(API_URL,     "https://api.twitter.com/1.1/").
+-define(AUTH_URL,    "https://api.twitter.com/oauth/").
 -define(SEARCH_ARGS, [<<"q">>, <<"result_type">>, <<"geocode">>, <<"lang">>,
                       <<"count">>, <<"until">>, <<"since_id">>, <<"max_id">>
                      ]).
-
--define(API_URL,  "https://api.twitter.com/1.1/").
--define(AUTH_URL, "https://api.twitter.com/oauth/").
 
 -record(state, {oauth_creds = #{} :: map()}).
 
@@ -150,10 +149,8 @@ handle_call({request_token, CallbackUri}, _From,
             {reply, Error, State}
     end;
 handle_call(get_authorize_url, _From, #state{oauth_creds = Creds} = State) ->
-    AuthenticateUrl = build_url(
-                        authorize,
-                        [{oauth_token, maps:get(<<"access_token">>, Creds)}]),
-    {reply, {ok, to_bin(AuthenticateUrl)}, State};
+    URI = build_url(authorize, #{oauth_token => maps:get(<<"access_token">>, Creds)}),
+    {reply, {ok, to_bin(URI)}, State};
 handle_call({get_access_token, OAuthToken, OAuthVerifier}, _From,
             #state{oauth_creds = Creds} = State) ->
     Updates = call_api(access_token, {OAuthToken, OAuthVerifier}, Creds),
@@ -193,8 +190,8 @@ handle_call({lookup_status, Args}, _From,
     {reply, call_api(lookup_status, Args, Creds), State};
 handle_call({search, Args}, _From,
             #state{oauth_creds = Creds} = State) ->
-    Query = flatten_search_args(Args),
-    {reply, call_api(search, Query, Creds), State};
+    QueryArgs = to_args(filter_search_args(Args)),
+    {reply, call_api(search, QueryArgs, Creds), State};
 
 handle_call(Request, _From, State) ->
     {reply, {unknown_request, Request}, State}.
@@ -220,15 +217,13 @@ terminate(normal, _State) ->
 %%% Internal functionality
 %%%=============================================================================
 call_api(request_token = UrlType, CallbackUri, Map) ->
-    Args = [{oauth_callback, CallbackUri}],
+    Args = #{oauth_callback => CallbackUri},
     parse_httpc_response(
-      params, oauth:post(get_url(UrlType), Args, oauth_creds(Map)));
+      params, oauth:post(get_url(UrlType), to_args(Args), oauth_creds(Map)));
 call_api(access_token = UrlType, {OAuthToken, OAuthVerifier}, Map) ->
     case validate_access_token(Map) of
         {ok, OAuthSecretToken} ->
-            EndpointURI = get_url(UrlType),
-            VerifierArg = [{oauth_verifier, to_list(OAuthVerifier)}],
-            error_logger:info_msg("yatael.api.call=~s", [EndpointURI]),
+            VerifierArg = #{oauth_verifier => to_list(OAuthVerifier)},
             Response = oauth_post(UrlType, VerifierArg, Map, OAuthToken,
                                   OAuthSecretToken),
             {ok, Params} = parse_httpc_response(params, Response),
@@ -239,22 +234,19 @@ call_api(access_token = UrlType, {OAuthToken, OAuthVerifier}, Map) ->
 call_api(UrlType, Args, Map) ->
     case validate_credentials(Map) of
         {ok, {AccessToken, AccessTokenSecret}} ->
-            EndpointURI = get_url(UrlType),
-            error_logger:info_msg("yatael.api.call=~s", [EndpointURI]),
-            Response = oauth_get(UrlType, flatten_args(Args), Map,
+            Response = oauth_get(UrlType, Args, Map,
                                  AccessToken, AccessTokenSecret),
-            error_logger:info_msg("yatael.api.respons=~s", [Response]),
             parse_httpc_response(json, Response);
         Error ->
             Error
     end.
 
 oauth_get(UrlType, Args, Creds, AccessToken, AccessTokenSecret) ->
-    oauth:get(get_url(UrlType), Args, oauth_creds(Creds),
+    oauth:get(get_url(UrlType), to_args(Args), oauth_creds(Creds),
               to_list(AccessToken), to_list(AccessTokenSecret)).
 
 oauth_post(UrlType, Args, Creds, AccessToken, AccessTokenSecret) ->
-    oauth:post(get_url(UrlType), Args, oauth_creds(Creds),
+    oauth:post(get_url(UrlType), to_args(Args), oauth_creds(Creds),
                to_list(AccessToken), to_list(AccessTokenSecret)).
 
 validate_access_token(Map) when is_map(Map) ->
@@ -289,26 +281,26 @@ build_access_token(AccessParams) ->
     #{<<"access_token">>        => to_bin(oauth:token(AccessParams)),
       <<"access_token_secret">> => to_bin(oauth:token_secret(AccessParams))}.
 
-flatten_search_args(Args) when is_map(Args) ->
-    flatten_args(maps:with(?SEARCH_ARGS, Args));
-flatten_search_args(Args) ->
+filter_search_args(Args) when is_map(Args) ->
+    maps:with(?SEARCH_ARGS, Args);
+filter_search_args(Args) ->
     Args.
 
 parse_json(Response) ->
     jiffy:decode(unicode:characters_to_binary(Response), [return_maps]).
 
 build_url(UrlType, Args) ->
-    get_url(UrlType) ++ "?" ++ flatten_args(Args).
+    get_url(UrlType) ++ "?" ++ flatten_qs(Args).
 
-flatten_args(Args) when is_map(Args) ->
-    flatten_args(maps:to_list(Args));
-flatten_args(Args) ->
+flatten_qs(Args) when is_map(Args) ->
+    flatten_qs(to_args(Args));
+flatten_qs(Args) ->
     string:join(
-      [encode_arg(K) ++ "=" ++ encode_arg(V) || {K,V} <- Args], "&").
+      [encode_qs(K) ++ "=" ++ encode_qs(V) || {K,V} <- Args], "&").
 
-encode_arg(Value) when is_list(Value) ->
-    encode_arg(Value);
-encode_arg(Value) ->
+encode_qs(Value) when is_list(Value) ->
+    encode_qs(Value);
+encode_qs(Value) ->
     http_uri:encode(to_list(Value)).
 
 get_url(request_token) ->
@@ -329,6 +321,11 @@ get_url(lookup_status) ->
     ?API_URL ++ "statuses/lookup.json";
 get_url(search) ->
     ?API_URL ++ "search/tweets.json".
+
+to_args(Map) when is_map(Map) ->
+    maps:to_list(Map);
+to_args(PL) ->
+    PL.
 
 to_bin(L) when is_list(L) ->
     list_to_binary(L);
