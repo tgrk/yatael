@@ -17,12 +17,13 @@ yatael_test_() ->
      fun setup/0,
      fun terminate/1,
      [
-       {"Authorization",                 fun test_auth/0}
-     , {"Authorization helper",          fun test_auth_helper/0}
-     , {"Unauthorized retrieve call",    fun test_unauth/0}
-     , {"Mocked Authorization",          fun test_mock_auth/0}
-     , {"Mocked API call timeline",      fun test_mock_timeline/0}
-     , {"Mocked API call lookup status", fun test_mock_lookup/0}
+       {"Authorization",                   fun test_auth/0}
+     , {"Authorization helper",            fun test_auth_helper/0}
+     , {"Unauthorized retrieve call",      fun test_unauth/0}
+     , {"Mocked API call - authorization", fun test_mock_auth/0}
+     , {"Mocked API call - timeline",      fun test_mock_timeline/0}
+     , {"Mocked API call - lookup status", fun test_mock_lookup/0}
+     , {"Mocked API call - search",        fun test_mock_search/0}
      ]
     }.
 
@@ -39,7 +40,6 @@ test_auth() ->
     ?assertEqual(ok, yatael:request_token(<<"http://127.0.0.1/">>)),
 
     {ok, Creds} = yatael:get_oauth_credentials(),
-    ?debugFmt("result=~p", [Creds]),
 
     ?assert(maps:is_key(<<"access_token">>, Creds)),
     ?assert(maps:is_key(<<"consumer_key">>, Creds)),
@@ -84,8 +84,8 @@ test_mock_auth() ->
 
 test_auth_helper() ->
     ?assertEqual({error, missing_callback_uri}, yatael_auth:authorize(#{})),
-    ReqMap = #{<<"oauth_token">>    => <<"fUE2_gAAAAAASpgSAAABVCkvSyA">>,
-               <<"oauth_verifier">> => <<"BIfqu0wreL52b9Us3EDlvBQhBQVPBzdE">>,
+    ReqMap = #{<<"oauth_token">>    => <<"foobar">>,
+               <<"oauth_verifier">> => <<"bar_verifier">>,
                <<"callback_uri">>   => <<"http">>},
     ?assertEqual({error, missing_access_token}, yatael_auth:authorize(ReqMap)),
     ok.
@@ -110,7 +110,18 @@ test_mock_lookup() ->
         ?assertEqual(true, meck:validate(httpc)),
 
         ok = meck:expect(httpc, request, match_expect(lookup_status)),
-        ?assertMatch({ok, _, _}, yatael:lookup_status([foo, bar]))
+        ?assertMatch({ok, _, _}, yatael:lookup_status(#{foo=>bar}))
+    after
+        meck:unload(httpc)
+    end.
+
+test_mock_search() ->
+    meck:new(httpc, [passthrough]),
+    try
+        ?assertEqual(true, meck:validate(httpc)),
+
+        ok = meck:expect(httpc, request, match_expect(search)),
+        ?assertMatch({ok, _, _}, yatael:search(#{<<"q">> => <<"noisesearch">>}))
     after
         meck:unload(httpc)
     end.
@@ -123,7 +134,7 @@ test_unauth() ->
 %%% Internal functionality
 %%%============================================================================
 read_api_keys() ->
-    case file:consult("../api.txt") of
+    case file:consult("api.txt") of
         {ok,[PL]} ->
             {proplists:get_value(consumer_key, PL),
              proplists:get_value(consumer_secret, PL)};
