@@ -3,6 +3,17 @@ yatael
 
 Yet Another [Twitter REST API][1] (v1.1) Erlang Library
 
+Exported REST API Calls
+===
+* `verify_credentials/1`
+* `get_timeline/0`
+* `get_timeline/1`
+* `get_mentions_timeline/1`
+* `lookup_status/1`
+* `search/1`
+
+Besides REST API and Search API there is of coure support for OAuth and few related helper functions for easy signup integration.
+
 ## Dependencies
 * Erlang (>= R17)
 * [jiffy][2]
