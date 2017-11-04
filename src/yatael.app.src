@@ -1,14 +1,17 @@
 {application, yatael, [
     {description, "Yet Another Twitter API Erlang Library"},
-    {vsn, git},
-    {modules, [yatael]},
+    {vsn, "1.0.0"},
     {registered, []},
     {applications, [kernel,
                     stdlib,
                     inets,
                     ssl,
+                    crypto,
+                    public_key,
                     oauth
-                   ]
-    },
-    {env, []}
+                   ]},
+    {env, []},
+    {maintainers, ["Martin Wiso"]},
+    {licenses, ["MIT"]},
+    {links, [{"Github","https://github.com/tgrk/yatael"}]}
 ]}.

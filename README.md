@@ -1,10 +1,16 @@
+[![CircleCI](https://circleci.com/gh/tgrk/yatael/tree/master.svg?style=svg)](https://circleci.com/gh/tgrk/yatael/tree/master)
+[![Hex pm](http://img.shields.io/hexpm/v/yatael.svg?style=flat)](https://hex.pm/packages/yatael)
+[![codecov.io](https://codecov.io/github/tgrk/yatael/coverage.svg?branch=master)](https://codecov.io/github/tgrk/yatael?branch=master)
+
 yatael
 ======
 
 Yet Another [Twitter REST API][1] (v1.1) Erlang Library
 
-Exported REST API Calls
+Implemented REST API Calls
 ===
+* `authorize/1`
+* `unauthorize/0`
 * `verify_credentials/1`
 * `get_timeline/0`
 * `get_timeline/1`
@@ -19,6 +25,10 @@ Besides REST API and Search API there is of coure support for OAuth and few rela
 * [jiffy][2]
 
 Fetch and compile all dependencies:
+```
+$ rebar3 update compile
+```
+or
 ```bash
 $ rebar get-deps compile
 ```

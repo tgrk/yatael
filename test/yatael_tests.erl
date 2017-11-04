@@ -12,12 +12,11 @@
 -include_lib("eunit/include/eunit.hrl").
 
 %% =============================================================================
-yatael_test_() ->
+yatael_tests_() ->
     {setup,
      fun setup/0,
      fun terminate/1,
-     [
-       {"Authorization",                   fun test_auth/0}
+     [ {"Authorization",                   fun test_auth/0}
      , {"Authorization helper",            fun test_auth_helper/0}
      , {"Unauthorized retrieve call",      fun test_unauth/0}
      , {"Mocked API call - authorization", fun test_mock_auth/0}
@@ -134,13 +133,17 @@ test_unauth() ->
 %%% Internal functionality
 %%%============================================================================
 read_api_keys() ->
-    case file:consult("api.txt") of
-        {ok,[PL]} ->
+    case filelib:is_regular("api.txt") of
+        true ->
+            {ok, [PL]} = file:consult("api.txt"),
             {proplists:get_value(consumer_key, PL),
              proplists:get_value(consumer_secret, PL)};
-        _ ->
-            throw("Unable to read credentials from api.txt file!")
+        false ->
+            {get_oauth_env("consumer_key"), get_oauth_env("consumer_secret")}
     end.
+
+get_oauth_env(Key) ->
+    os:getenv(string:to_upper("twitter_" ++ Key)).
 
 match_expect(Type) ->
     ExpectedURI = yatael:get_url(Type),
