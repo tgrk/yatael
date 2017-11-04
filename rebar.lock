@@ -1,0 +1,14 @@
+{"1.1.0",
+[{<<"eunit_formatters">>,{pkg,<<"eunit_formatters">>,<<"0.3.1">>},0},
+ {<<"jiffy">>,{pkg,<<"jiffy">>,<<"0.14.7">>},0},
+ {<<"meck">>,{pkg,<<"meck">>,<<"0.8.7">>},0},
+ {<<"oauth">>,
+  {git,"https://github.com/tim/erlang-oauth.git",
+       {ref,"bd19896e31125f99ff45bb5850b1c0e74b996743"}},
+  0}]}.
+[
+{pkg_hash,[
+ {<<"eunit_formatters">>, <<"7A6FC351EB5B873E2356B8852EB751E20C13A72FBCA03393CF682B8483509573">>},
+ {<<"jiffy">>, <<"9F33B893EDD6041CEAE03BC1E50B412E858CC80B46F3D7535A7A9940A79A1C37">>},
+ {<<"meck">>, <<"EBAD16CA23F685B07AED3BC011EFFF65FBAF28881A8ADF925428EF5472D390EE">>}]}
+].
