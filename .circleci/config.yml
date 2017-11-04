@@ -23,7 +23,7 @@ jobs:
           name: Run eunit tests
           command: rebar3 eunit
       - run:
-          name: Display webapp coverage report
+          name: Display coverage report
           command: rebar3 cover -v
       - run:
           name: Convert coverage report to codecov supported format

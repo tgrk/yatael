@@ -12,7 +12,7 @@
 -include_lib("eunit/include/eunit.hrl").
 
 %% =============================================================================
-yatael_tests_() ->
+yatael_test_() ->
     {setup,
      fun setup/0,
      fun terminate/1,
