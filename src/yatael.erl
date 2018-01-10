@@ -219,8 +219,7 @@ terminate(normal, _State) ->
 %%%=============================================================================
 call_api(request_token = UrlType, CallbackUri, Map) ->
     Args = #{oauth_callback => CallbackUri},
-    parse_httpc_response(
-      params, oauth:post(get_url(UrlType), to_args(Args), oauth_creds(Map)));
+    parse_httpc_response(params, oauth_post(UrlType, Args, Map));
 call_api(access_token = UrlType, {OAuthToken, OAuthVerifier}, Map) ->
     case validate_access_token(Map) of
         {ok, OAuthSecretToken} ->
@@ -253,6 +252,10 @@ oauth_post(UrlType, Args, Creds, AccessToken, AccessTokenSecret) ->
     lager:debug("[Twitter API] POST call - ~p", [UrlType]),
     oauth:post(get_url(UrlType), to_args(Args), oauth_creds(Creds),
                to_list(AccessToken), to_list(AccessTokenSecret)).
+
+oauth_post(UrlType, Args, Creds) ->
+    lager:debug("[Twitter API] POST call - ~p", [UrlType]),
+    oauth:post(get_url(UrlType), to_args(Args), oauth_creds(Creds)).
 
 validate_access_token(Map) when is_map(Map) ->
     validate_access_token(get_access_token(Map));
