@@ -7,3 +7,4 @@ api.txt
 .rebar/
 _build/
 compile_commands.json
+log/

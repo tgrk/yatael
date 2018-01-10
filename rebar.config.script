@@ -5,7 +5,9 @@ case erlang:function_exported(rebar3, main, 1) of
     false ->
         %% rebar 2.x or older
         NewConf = lists:keystore(deps_dir, 1, CONFIG, {deps_dir, "deps"}),
-        Deps = [{jiffy, "",
+        Deps = [{lager, ".*",
+                 {git, "https://github.com/erlang-lager/lager.git", {tag, "3.2.4"}}},
+                {jiffy, "",
                  {git, "https://github.com/davisp/jiffy.git", {tag, "0.14.7"}}},
                 {oauth, "",
                  {git, "https://github.com/tgrk/erlang-oauth.git", {tag, "v1.6.0"}}},

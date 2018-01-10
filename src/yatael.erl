@@ -194,6 +194,7 @@ handle_call({search, Args}, _From,
     {reply, call_api(search, QueryArgs, Creds), State};
 
 handle_call(Request, _From, State) ->
+    lager:error("[Twitter API] unknown call - ~p", [Request]),
     {reply, {unknown_request, Request}, State}.
 
 handle_cast(unauthorize, #state{oauth_creds = Creds} = State) ->
@@ -229,6 +230,7 @@ call_api(access_token = UrlType, {OAuthToken, OAuthVerifier}, Map) ->
             {ok, Params} = parse_httpc_response(params, Response),
             maps:merge(Map, build_access_token(Params));
         Error ->
+            lager:error("[Twitter API] ~p", [Error]),
             Error
     end;
 call_api(UrlType, Args, Map) ->
@@ -238,14 +240,17 @@ call_api(UrlType, Args, Map) ->
                                  AccessToken, AccessTokenSecret),
             parse_httpc_response(json, Response);
         Error ->
+            lager:error("[Twitter API] ~p", [Error]),
             Error
     end.
 
 oauth_get(UrlType, Args, Creds, AccessToken, AccessTokenSecret) ->
+    lager:debug("[Twitter API] GET call - ~p", [UrlType]),
     oauth:get(get_url(UrlType), to_args(Args), oauth_creds(Creds),
               to_list(AccessToken), to_list(AccessTokenSecret)).
 
 oauth_post(UrlType, Args, Creds, AccessToken, AccessTokenSecret) ->
+    lager:debug("[Twitter API] POST call - ~p", [UrlType]),
     oauth:post(get_url(UrlType), to_args(Args), oauth_creds(Creds),
                to_list(AccessToken), to_list(AccessTokenSecret)).
 
@@ -342,7 +347,8 @@ to_list(Val) ->
     Val.
 
 parse_httpc_response(Type, Reply) ->
-    {ok, {{_Version, Code, _Status}, Headers, Body}} = Reply,
+    {ok, {{_Version, Code, Status}, Headers, Body}} = Reply,
+    lager:debug("[Twitter API] response - ~p", [Status]),
     case Code of
         200 ->
             type_specific_reply(Type, Reply);

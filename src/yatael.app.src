@@ -1,10 +1,11 @@
 {application, yatael, [
     {description, "Yet Another Twitter API Erlang Library"},
-    {vsn, "1.0.0"},
+    {vsn, "1.1.0"},
     {registered, []},
     {applications, [kernel,
                     stdlib,
                     inets,
+                    lager,
                     ssl,
                     crypto,
                     public_key,
