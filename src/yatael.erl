@@ -43,7 +43,6 @@
                     | {error, headers(), term()}.
 -type query_args() :: list({atom(), any()}) | map().
 
--define(SERV,        ?MODULE).
 -define(TIMEOUT,     1200000).
 -define(API_URL,     "https://api.twitter.com/1.1/").
 -define(AUTH_URL,    "https://api.twitter.com/oauth/").
@@ -58,11 +57,11 @@
 %%%=============================================================================
 -spec start_link() -> {ok, pid()} | {error, term()}.
 start_link() ->
-  gen_server:start_link({local, ?SERV}, ?MODULE, [], []).
+  gen_server:start_link({local, get_server_name()}, ?MODULE, [], []).
 
 -spec start_link(string(), string()) -> {ok, pid()} | {error, term()}.
 start_link(CKey, CSecret) ->
-  gen_server:start_link({local, ?SERV}, ?MODULE, [CKey, CSecret], []).
+  gen_server:start_link({local, get_server_name()}, ?MODULE, [CKey, CSecret], []).
 
 -spec stop(pid()) -> ok.
 stop(Pid) ->
@@ -182,7 +181,7 @@ handle_call({search, Args}, _From, #state{oauth_creds = Creds} = State) ->
   {reply, call_api(search, QueryArgs, Creds), State};
 
 handle_call(Request, _From, State) ->
-  lager:error("[Twitter API] unknown call - ~p", [Request]),
+  error_logger:error_msg("[Twitter API] unknown call - ~p", [Request]),
   {reply, {unknown_request, Request}, State}.
 
 handle_cast(unauthorize, #state{oauth_creds = Creds} = State) ->
@@ -202,7 +201,7 @@ code_change(_OldVsn, State, _Extra) ->
 terminate(normal, _State) ->
   ok;
 terminate(Reason, _State) ->
-  lager:error("[Twitter API] unexpected exit due to ~p", [Reason]),
+  error_logger:error_msg("[Twitter API] unexpected exit due to ~p", [Reason]),
   ok.
 
 %%%=============================================================================
@@ -219,7 +218,7 @@ call_api(access_token = UrlType, {OAuthToken, OAuthVerifier}, Map) ->
       {ok, Params} = parse_httpc_response(params, Response),
       maps:merge(Map, build_access_token(Params));
     Error ->
-      lager:error("[Twitter API] ~p", [Error]),
+      error_logger:error_msg("[Twitter API] ~p", [Error]),
       Error
   end;
 call_api(UrlType, Args, Map) ->
@@ -228,22 +227,22 @@ call_api(UrlType, Args, Map) ->
       Response = oauth_get(UrlType, Args, Map, AccessToken, AccessTokenSecret),
       parse_httpc_response(json, Response);
     Error ->
-      lager:error("[Twitter API] ~p", [Error]),
+      error_logger:error_msg("[Twitter API] ~p", [Error]),
       Error
   end.
 
 oauth_get(UrlType, Args, Creds, AccessToken, AccessTokenSecret) ->
-  lager:debug("[Twitter API] GET call - ~p", [UrlType]),
+  error_logger:info_msg("[Twitter API] GET call - ~p", [UrlType]),
   oauth:get(get_url(UrlType), to_args(Args), oauth_creds(Creds),
             to_list(AccessToken), to_list(AccessTokenSecret)).
 
 oauth_post(UrlType, Args, Creds, AccessToken, AccessTokenSecret) ->
-  lager:debug("[Twitter API] POST call - ~p", [UrlType]),
+  error_logger:info_msg("[Twitter API] POST call - ~p", [UrlType]),
   oauth:post(get_url(UrlType), to_args(Args), oauth_creds(Creds),
             to_list(AccessToken), to_list(AccessTokenSecret)).
 
 oauth_post(UrlType, Args, Creds) ->
-  lager:debug("[Twitter API] POST call - ~p", [UrlType]),
+  error_logger:info_msg("[Twitter API] POST call - ~p", [UrlType]),
   oauth:post(get_url(UrlType), to_args(Args), oauth_creds(Creds)).
 
 validate_access_token(Map) when is_map(Map) ->
@@ -325,6 +324,8 @@ to_args(PL) ->
 
 to_bin(L) when is_list(L) ->
   list_to_binary(L);
+to_bin(A) when is_atom(A) ->
+  atom_to_binary(A, latin1);
 to_bin(B) when is_binary(B) ->
   B.
 
@@ -339,7 +340,7 @@ to_list(Val) ->
 
 parse_httpc_response(Type, Reply) ->
   {ok, {{_Version, Code, Status}, Headers, Body}} = Reply,
-  lager:debug("[Twitter API] response - ~p", [Status]),
+  error_logger:info_msg("[Twitter API] response - ~p", [Status]),
   case Code of
     200 ->
       type_specific_reply(Type, Reply);
@@ -367,3 +368,7 @@ get_access_token_secret(Map) ->
 
 get_value(Key, Map) ->
   maps:get(Key, Map, undefined).
+
+get_server_name() ->
+  N = erlang:phash2(erlang:monotonic_time()),
+  list_to_atom("yatael_" ++ integer_to_list(N)).
