@@ -211,8 +211,9 @@ call_api(request_token = UrlType, CallbackUri, Map) ->
   Args = #{oauth_callback => CallbackUri},
   parse_httpc_response(params, oauth_post(UrlType, Args, Map));
 call_api(access_token = UrlType, {OAuthToken, OAuthVerifier}, Map) ->
-  case validate_access_token(Map) of
-    {ok, OAuthSecretToken} ->
+  case validate_oauth_params(OAuthToken, OAuthVerifier) of
+    ok ->
+      OAuthSecretToken = get_access_token(Map),
       VerifierArg = #{oauth_verifier => to_list(OAuthVerifier)},
       Response = oauth_post(UrlType, VerifierArg, Map, OAuthToken, OAuthSecretToken),
       {ok, Params} = parse_httpc_response(params, Response),
@@ -245,12 +246,14 @@ oauth_post(UrlType, Args, Creds) ->
   error_logger:info_msg("[Twitter API] POST call - ~p", [UrlType]),
   oauth:post(get_url(UrlType), to_args(Args), oauth_creds(Creds)).
 
-validate_access_token(Map) when is_map(Map) ->
-  validate_access_token(get_access_token(Map));
-validate_access_token(undefined) ->
-  {error, missing_access_token};
-validate_access_token(OAuthSecretToken) ->
-  {ok, OAuthSecretToken}.
+validate_oauth_params(undefined, undefined) ->
+  {error, missing_oauth_credentials};
+validate_oauth_params(undefined, _OAuthVerifier) ->
+  {error, missing_oauth_token};
+validate_oauth_params(_OAuthToken, undefined) ->
+  {error, missing_oauth_verifier};
+validate_oauth_params(_OAuthToken, _OAuthVerifier) ->
+  ok.
 
 validate_credentials(Map) ->
   validate_credentials(get_access_token(Map), get_access_token_secret(Map)).
