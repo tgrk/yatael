@@ -218,7 +218,7 @@ call_api(access_token = UrlType, {OAuthToken, OAuthVerifier}, Map) ->
       {ok, Params} = parse_httpc_response(params, Response),
       maps:merge(Map, build_access_token(Params));
     Error ->
-      error_logger:error_msg("[Twitter API] ~p", [Error]),
+      error_logger:error_msg("[Twitter API] Error ~s - ~p", [UrlType, Error]),
       Error
   end;
 call_api(UrlType, Args, Map) ->
@@ -227,7 +227,7 @@ call_api(UrlType, Args, Map) ->
       Response = oauth_get(UrlType, Args, Map, AccessToken, AccessTokenSecret),
       parse_httpc_response(json, Response);
     Error ->
-      error_logger:error_msg("[Twitter API] ~p", [Error]),
+      error_logger:error_msg("[Twitter API] Error ~s - ~p", [UrlType, Error]),
       Error
   end.
 
