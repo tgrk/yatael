@@ -209,14 +209,14 @@ terminate(Reason, _State) ->
 %%%=============================================================================
 call_api(request_token = UrlType, CallbackUri, Map) ->
   Args = #{oauth_callback => CallbackUri},
-  parse_httpc_response(params, oauth_post(UrlType, Args, Map));
+  parse_httpc_response(UrlType, params, oauth_post(UrlType, Args, Map));
 call_api(access_token = UrlType, {OAuthToken, OAuthVerifier}, Map) ->
   case validate_oauth_params(OAuthToken, OAuthVerifier) of
     ok ->
       OAuthSecretToken = get_access_token(Map),
       VerifierArg = #{oauth_verifier => to_list(OAuthVerifier)},
       Response = oauth_post(UrlType, VerifierArg, Map, OAuthToken, OAuthSecretToken),
-      {ok, Params} = parse_httpc_response(params, Response),
+      {ok, Params} = parse_httpc_response(UrlType, params, Response),
       maps:merge(Map, build_access_token(Params));
     Error ->
       error_logger:error_msg("[Twitter API] Error ~s - ~p", [UrlType, Error]),
@@ -226,7 +226,7 @@ call_api(UrlType, Args, Map) ->
   case validate_credentials(Map) of
     {ok, {AccessToken, AccessTokenSecret}} ->
       Response = oauth_get(UrlType, Args, Map, AccessToken, AccessTokenSecret),
-      parse_httpc_response(json, Response);
+      parse_httpc_response(UrlType, json, Response);
     Error ->
       error_logger:error_msg("[Twitter API] Error ~s - ~p", [UrlType, Error]),
       Error
@@ -341,9 +341,9 @@ to_list(Value) when is_binary(Value) ->
 to_list(Val) ->
   Val.
 
-parse_httpc_response(Type, Reply) ->
+parse_httpc_response(UrlType, Type, Reply) ->
   {ok, {{_Version, Code, Status}, Headers, Body}} = Reply,
-  error_logger:info_msg("[Twitter API] response - ~p", [Status]),
+  error_logger:info_msg("[Twitter API] response ~s - ~p", [UrlType, Status]),
   case Code of
     200 ->
       type_specific_reply(Type, Reply);
