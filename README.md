@@ -1,5 +1,4 @@
 [![CircleCI](https://circleci.com/gh/tgrk/yatael/tree/master.svg?style=svg)](https://circleci.com/gh/tgrk/yatael/tree/master)
-[![Hex pm](http://img.shields.io/hexpm/v/yatael.svg?style=flat)](https://hex.pm/packages/yatael)
 [![codecov.io](https://codecov.io/github/tgrk/yatael/coverage.svg?branch=master)](https://codecov.io/github/tgrk/yatael?branch=master)
 
 yatael
@@ -9,14 +8,17 @@ Yet Another [Twitter REST API][1] (v1.1) Erlang Library
 
 Implemented REST API Calls
 ===
-* `authorize/1`
-* `unauthorize/0`
-* `verify_credentials/1`
-* `get_timeline/0`
+* `request_token/2`
+* `get_authorize_url/1`
+* `get_access_token/3`
+* `authorize/2`
+* `unauthorize/1`
+* `verify_credentials/2`
 * `get_timeline/1`
-* `get_mentions_timeline/1`
-* `lookup_status/1`
-* `search/1`
+* `get_timeline/2`
+* `get_mentions_timeline/2`
+* `lookup_status/2`
+* `search/2`
 
 Besides REST API and Search API there is of coure support for OAuth and few related helper functions for easy signup integration.
 
@@ -59,55 +61,54 @@ Register your application
 Raw library usage
 ===
 ```erlang
-1> ConsumerKey = <<"foo"">>,
-2> ConsumerSecret = <<"bar"">>,
+1> ConsumerKey = <<"foo">>,
+2> ConsumerSecret = <<"bar">>,
 3> CallbackUri = <<"http://127.0.0.1/">>.
 4> {ok, _Apps} = application:ensure_all_started(yatael).
-5> {ok, _Pid} = yatael:start_link(ConsumerKey, ConsumerSecret).
-6> ok = yatael:request_token(CallbackUri).
-7> {ok, Url} = yatael:get_authorize_url().
+5> {ok, Pid} = yatael:start_link(ConsumerKey, ConsumerSecret).
+6> ok = yatael:request_token(Pid, CallbackUri).
+7> {ok, Url} = yatael:get_authorize_url(Pid).
 ```
 Open `Url` value in brower and accept Twitter oAuth and extract following arguments
 after sucessfull redirect to your `CallbackUri`:
 ```erlang
 8> AccessToken = <<"foo2">>.
 9> Verifier = <<"bar2">>.
-10> ok = yatael:get_access_token(AccessToken, Verifier),
+10> ok = yatael:get_access_token(Pid, AccessToken, Verifier),
 ```
 Now athentification is done and you can use supproted API calls:
 ```erlang
-11> yatael:verify_credentials([{skip_status, true}]).
+11> yatael:verify_credentials(Pid, [{skip_status, true}]).
 {ok,#{<<"contributors_enabled">> => false,
       <<"created_at">> => <<"Fri Jun 26 09:22:24 +0000 2009">>,
       <<"default_profile">> => false,
       <<"default_profile_image">> => false,
       ....
-12> yatael:get_timeline().
+12> yatael:get_timeline(Pid).
       ....
-13> yatael_auth:unauthorize().
+13> yatael_auth:unauthorize(Pid).
 ok
 ```
 
 Auth helper usage
 ===
 ```erlang
-1> ConsumerKey = <<"foo"">>,
-2> ConsumerSecret = <<"bar"">>,
+1> ConsumerKey = <<"foo">>,
+2> ConsumerSecret = <<"bar">>,
 3> CallbackUri = <<"http://127.0.0.1/">>.
 4> {ok, _Apps} = application:ensure_all_started(yatael).
-5> {ok, _Pid} = yatael:start_link(ConsumerKey, ConsumerSecret).
-6> ok = yatael:request_token(CallbackUri).
-7> {ok, Url} = yatael:get_authorize_url().
+5> {ok, Pid} = yatael:start_link(ConsumerKey, ConsumerSecret).
+6> ok = yatael:request_token(Pid, CallbackUri).
+7> {ok, Url} = yatael:get_authorize_url(Pid).
+...
 8> Map = #{<<"oauth_token">> => <<"foo3">>, <<"oauth_verifier">> => <<"bar3">>, <<"callback_uri">> => CallbackUri}.
-9> yatael_auth:authorize(Map).
+9> yatael_auth:authorize(Pid, Map).
 {ok,#{<<"contributors_enabled">> => false,
       <<"created_at">> => <<"Fri Jun 26 09:22:24 +0000 2009">>,
       <<"default_profile">> => false,
       <<"default_profile_image">> => false,
       ....
-10> yatael:get_timeline().
-      ....
-11> yatael_auth:unauthorize().
+10> yatael_auth:unauthorize(Pid).
 ok
 
 ```
