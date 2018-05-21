@@ -295,8 +295,7 @@ get_expected_response(access_token) ->
     "screen_name=tajgur&x_auth_expires=0";
 get_expected_response(request_token) ->
   "oauth_token=foo&oauth_token_secret=bar&oauth_callback_confirmed=true";
-get_expected_response(Other) ->
-  ?debugFmt("DEBUG: other=~p", [Other]),
+get_expected_response(_Other) ->
   "{\"foo\": \"bar\"}".
 
 start_client() ->
