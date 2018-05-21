@@ -17,13 +17,14 @@ yatael_test_() ->
      fun setup/0,
      fun terminate/1,
      [
-          {"Authorization",                   fun test_auth/0}
-        % , {"Authorization helper",            fun test_auth_helper/0}
-        , {"Mocked API call - authorization", fun test_mock_auth/0}
-        , {"Mocked API call - timeline",      fun test_mock_timeline/0}
-        , {"Mocked API call - lookup status", fun test_mock_lookup/0}
-        , {"Mocked API call - search",        fun test_mock_search/0}
-        , {"Mocked multiple clients",         fun test_mock_multiple_clients/0}
+          {"Authorization and validation", fun test_auth/0}
+        , {"Mocked authorization helper",  fun test_mock_auth_helper/0}
+        , {"Mocked authorization",         fun test_mock_auth/0}
+        , {"Mocked timeline",              fun test_mock_timeline/0}
+        , {"Mocked mentions timeline",     fun test_mock_mentions_timeline/0}
+        , {"Mocked lookup status",         fun test_mock_lookup/0}
+        , {"Mocked search",                fun test_mock_search/0}
+        , {"Mocked multiple clients",      fun test_mock_multiple_clients/0}
       ]
     }.
 
@@ -48,34 +49,86 @@ test_auth() ->
     AuthUrl
   ),
 
+  CKey = <<"foo">>,
+  CSecret = <<"bar">>,
+  ?assertEqual(ok, yatael:set_oauth_credentials(Pid, CKey, CSecret)),
+  {ok, NewCreds} = yatael:get_oauth_credentials(Pid),
+  ?assertEqual(CKey,    maps:get(<<"consumer_key">>, NewCreds)),
+  ?assertEqual(CSecret, maps:get(<<"consumer_secret">>, NewCreds)),
+
   ?assertEqual(ok, yatael:unauthorize(Pid)),
+
+  ?assertEqual(
+    {error, missing_oauth_credentials},
+    yatael:get_access_token(Pid, undefined, undefined)
+  ),
+  ?assertEqual(
+    {error, missing_oauth_verifier},
+    yatael:get_access_token(Pid, <<"foo">>, undefined)
+  ),
+  ?assertEqual(
+    {error, missing_oauth_token},
+    yatael:get_access_token(Pid, undefined, <<"bar">>)
+  ),
+  ?assertEqual(
+    {error, missing_credentials},
+    yatael:get_timeline(Pid)
+  ),
 
   ?assertEqual(ok, stop_client(Pid)),
   ok.
 
-test_auth_helper() ->
+test_mock_auth_helper() ->
   {ok, Pid} = start_client(),
+
+  OAuthCreds = #{
+    <<"oauth_token">>    => <<"access_token">>,
+    <<"callback_uri">>   => <<"http://127.0.0.1/">>,
+    <<"oauth_verifier">> => <<"bar_verifier">>
+  },
 
   ?assertEqual(
     {error, missing_callback_uri},
     yatael_auth:authorize(Pid, #{})
   ),
 
+  ?assertEqual(
+    {error, missing_oauth_verifier},
+    yatael_auth:authorize(Pid, #{<<"oauth_token">> => <<"foo">>})
+  ),
+
+  ?assertEqual(
+    {error, missing_oauth_token},
+    yatael_auth:authorize(Pid, maps:remove(<<"oauth_token">>, OAuthCreds))
+  ),
+
   meck:new(httpc, [passthrough]),
   try
     ?assertEqual(true, meck:validate(httpc)),
 
-    ok = meck:expect(httpc, request, match_expect(request_token)),
-
-    OAuthCreds = #{
-      <<"oauth_token">>    => <<"access_token">>,
-      <<"callback_uri">>   => <<"http://127.0.0.1/">>,
-      <<"oauth_verifier">> => <<"bar_verifier">>
-    },
-    ?assertEqual(
-      {error, missing_access_token},
-      yatael_auth:authorize(Pid, OAuthCreds)
-    )
+    ok = meck:expect(httpc, request,
+      fun (_Method, {URI, _Headers, _ContentType, _Body}, _HTTPOptions, _Profile) ->
+            ExpectedURIs = [
+              access_token,
+              request_token,
+              verify_credentials
+            ],
+            MatchPred = fun (ExpectedType) ->
+              string:str(URI, yatael:get_url(ExpectedType)) > 0
+            end,
+            case lists:filter(MatchPred, ExpectedURIs) of
+              [Type] ->
+                {ok, {{<<>>, 200, <<>>}, [], get_expected_response(Type)}};
+              _Other ->
+                ?assert(false)
+            end;
+          (_Method, {URI, []}, _HTTPOptions, _Profile) ->
+            ExpectedURI = yatael:get_url(verify_credentials),
+            ?assertEqual(1, string:str(URI, ExpectedURI)),
+            {ok, {{<<>>, 200, <<>>}, [], get_expected_response(verify_credentials)}}
+      end
+    ),
+    ?assertMatch({ok, _Map}, yatael_auth:authorize(Pid, OAuthCreds))
   after
     meck:unload(httpc),
     ?assertEqual(ok, stop_client(Pid))
@@ -124,6 +177,20 @@ test_mock_timeline() ->
 
     ok = meck:expect(httpc, request, match_expect(user_timeline)),
     ?assertMatch({ok, _, _}, yatael:get_timeline(Pid, <<"tajgur">>))
+  after
+    meck:unload(httpc),
+    ?assertEqual(ok, stop_client(Pid))
+  end.
+
+test_mock_mentions_timeline() ->
+  {ok, Pid} = start_client(),
+
+  meck:new(httpc, [passthrough]),
+  try
+    ?assertEqual(true, meck:validate(httpc)),
+
+    ok = meck:expect(httpc, request, match_expect(mentions_timeline)),
+    ?assertMatch({ok, _, _}, yatael:get_mentions_timeline(Pid, #{}))
   after
     meck:unload(httpc),
     ?assertEqual(ok, stop_client(Pid))
@@ -191,29 +258,22 @@ test_mock_multiple_clients() ->
 %%% Internal functionality
 %%%============================================================================
 read_api_keys() ->
-  case filelib:is_regular("api.txt") of
+  PL = case filelib:is_regular("api.txt") of
     true ->
-      {ok, [PL]} = file:consult("api.txt"),
-      CKey     = proplists:get_value(consumer_key, PL),
-      CSecret  = proplists:get_value(consumer_secret, PL),
-      AToken   = proplists:get_value(access_token, PL),
-      ATSecret = proplists:get_value(access_token_secret, PL),
-      #{  <<"consumer_key">>        => to_bin(CKey),
-          <<"consumer_secret">>     => to_bin(CSecret),
-          <<"access_token">>        => to_bin(AToken),
-          <<"access_token_secret">> => to_bin(ATSecret)
-      };
+      {ok, [CredsPL]} = file:consult("api.txt"),
+      CredsPL;
     false ->
-      #{  <<"consumer_key">>        => maybe_get_from_env("consumer_key"),
-          <<"consumer_secret">>     => maybe_get_from_env("consumer_secret"),
-          <<"access_token">>        => maybe_get_from_env("access_token"),
-          <<"access_token_secret">> => maybe_get_from_env("access_token_secret")
-      }
-  end.
+      []
+  end,
+  #{  <<"consumer_key">>        => maybe_get_from_env("consumer_key", PL),
+      <<"consumer_secret">>     => maybe_get_from_env("consumer_secret", PL),
+      <<"access_token">>        => maybe_get_from_env("access_token", PL),
+      <<"access_token_secret">> => maybe_get_from_env("access_token_secret", PL)
+  }.
 
-maybe_get_from_env(Key) ->
+maybe_get_from_env(Key, PL) ->
   case get_oauth_env(Key) of
-    false -> <<>>;
+    false -> to_bin(proplists:get_value(list_to_atom(Key), PL));
     Value -> to_bin(Value)
   end.
 
@@ -235,7 +295,8 @@ get_expected_response(access_token) ->
     "screen_name=tajgur&x_auth_expires=0";
 get_expected_response(request_token) ->
   "oauth_token=foo&oauth_token_secret=bar&oauth_callback_confirmed=true";
-get_expected_response(_Other) ->
+get_expected_response(Other) ->
+  ?debugFmt("DEBUG: other=~p", [Other]),
   "{\"foo\": \"bar\"}".
 
 start_client() ->
@@ -245,11 +306,9 @@ start_client() ->
 
   case yatael:start_link(CKey, CSecret) of
     {ok, Pid} = Result ->
-      ?debugFmt("Starting client ~p!", [Pid]),
       ?assertEqual(ok, yatael:set_oauth_credentials(Pid, Creds)),
       Result;
     {error, {already_started, Pid}} ->
-      ?debugFmt("Client already started ~p!", [Pid]),
       {ok, Pid}
   end.
 
