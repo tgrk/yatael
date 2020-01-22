@@ -26,13 +26,17 @@ jobs:
           name: Display coverage report
           command: rebar3 cover -v
       - run:
+          name: Display webapp coverage report
+          command: rebar3 cover -v
+      - run:
           name: Convert coverage report to codecov supported format
-          command:  bin/covertool -cover _build/test/cover/eunit.coverdata -appname yatael -output cobertura.xml
+          command: rebar3 covertool generate
       - run:
           name: Upload coverage report to Codecov
           command: |
             python3 -m venv venv
             . venv/bin/activate
+            mv _build/test/covertool/yatael.covertool.xml cobertura.xml
             pip3 install --upgrade codecov
             codecov
       - save_cache:
