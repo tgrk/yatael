@@ -1,10 +1,10 @@
 {"1.1.0",
-[{<<"jiffy">>,{pkg,<<"jiffy">>,<<"0.15.2">>},0},
+[{<<"jiffy">>,{pkg,<<"jiffy">>,<<"1.0.1">>},0},
  {<<"oauth">>,
   {git,"https://github.com/tim/erlang-oauth.git",
        {ref,"bd19896e31125f99ff45bb5850b1c0e74b996743"}},
   0}]}.
 [
 {pkg_hash,[
- {<<"jiffy">>, <<"DE266C390111FD4EA28B9302F0BC3D7472468F3B8E0ACEABFBEFA26D08CD73B7">>}]}
+ {<<"jiffy">>, <<"4F25639772CA41202F41BA9C8F6CA0933554283DD4742C90651E03471C55E341">>}]}
 ].
