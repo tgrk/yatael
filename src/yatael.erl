@@ -341,6 +341,8 @@ to_list(Value) when is_binary(Value) ->
 to_list(Val) ->
   Val.
 
+parse_httpc_response(_UrlType, _Type, {error, _Reason} = Error)->
+  Error;
 parse_httpc_response(UrlType, Type, Reply) ->
   {ok, {{_Version, Code, Status}, Headers, Body}} = Reply,
   error_logger:info_msg("[Twitter API] response ~s - ~p", [UrlType, Status]),
