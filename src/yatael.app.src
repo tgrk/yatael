@@ -1,6 +1,6 @@
 {application, yatael, [
     {description, "Yet Another Twitter API Erlang Library"},
-    {vsn, "2.0.0"},
+    {vsn, "2.0.1"},
     {registered, []},
     {applications, [kernel,
                     stdlib,
